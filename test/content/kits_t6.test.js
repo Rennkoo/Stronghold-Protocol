@@ -200,6 +200,54 @@ test('蕾缪安: elite enemies in a Laterano range get wanted (×1.15) and she c
   assert.ok(near(hit.amount, expect, 1e-3), `×1.15 wanted bonus (${hit.amount} vs ${expect})`);
 });
 
+test('蕾缪安: wanted elites outside her initial range trigger S3 and consume locking ammo', () => {
+  const h = battle({
+    units: [{ chessId: 'chess_char_6_01_a', row: 12, col: 2, carryState: { sp: 99 } }, { chessId: 'test_lat_a', row: 10, col: 2 }],
+    enemies: [{ key: 'enemy_elite', pos: [10, 9] }],
+  });
+  const u = h.unit('chess_char_6_01_a');
+  h.run(2);
+  assert.equal(u.skill.active, false, 'unwanted distant enemy cannot trigger S3');
+  assert.ok(h.runUntil(() => lemFx(h, 'lock').some(l => l.src === u.id), 10), 'wanted enemy triggers S3 and is locked');
+  assert.ok(h.enemy('enemy_elite').findBuff('lemuen:wanted'));
+  assert.ok(u.skill.ammoLeft < u.skill.ammoMax);
+  checkInvariants(h.b);
+});
+
+test('蕾缪安: active S3 waits through sleep, then locks a naturally wanted distant elite', () => {
+  const h = battle({
+    units: [{ chessId: 'chess_char_6_01_a', row: 12, col: 2, carryState: { sp: 99 } }, { chessId: 'test_lat_a', row: 10, col: 2 }],
+    enemies: [{ key: 'enemy_dummy', pos: [12, 4] }, { key: 'enemy_elite', pos: [10, 9] }],
+  });
+  const u = h.unit('chess_char_6_01_a');
+  assert.ok(h.runUntil(() => u.skill.active, 2));
+  const e = h.enemy('enemy_elite');
+  h.b.kill(h.enemy('enemy_dummy'));
+  h.b.applyStatus(e, 'sleep', { duration: 10 });
+  const left = u.skill.ammoLeft;
+  h.run(9);
+  assert.ok(e.findBuff('lemuen:wanted'), 'sleep does not reset continuous presence');
+  assert.equal(u.skill.ammoLeft, left, 'cannot lock a sleeping enemy');
+  assert.ok(h.runUntil(() => lemFx(h, 'lock').some(l => l.src === u.id && l.id === e.id), 3), 'locks after waking');
+  checkInvariants(h.b);
+});
+
+test('蕾缪安: a partner Laterano range triggers wanted S3 across the united field', () => {
+  const h = battle({
+    kind: 'unite',
+    players: [
+      { playerId: 'A', seat: 0, side: 'L', colOffset: 0, units: [{ uid: 11, chessId: 'chess_char_6_01_a', row: 12, col: 2, carryState: { sp: 99 } }] },
+      { playerId: 'B', seat: 1, side: 'L', colOffset: 8, units: [{ uid: 21, chessId: 'test_lat_a', row: 10, col: 2 }] },
+    ],
+    enemies: [{ key: 'enemy_elite', pos: [10, 17] }],
+  });
+  const u = h.unit('chess_char_6_01_a');
+  assert.ok(h.runUntil(() => lemFx(h, 'lock').some(l => l.src === u.id), 12));
+  assert.ok(h.enemy('enemy_elite').findBuff('lemuen:wanted'));
+  assert.ok(u.skill.ammoLeft < u.skill.ammoMax);
+  checkInvariants(h.b);
+});
+
 test('圣聆初雪: snow damages walking enemies (75 % ATK) and slows them; S3 lures enemies next to her', () => {
   const h = battle({
     units: [{ chessId: 'chess_char_6_02_a', row: 10, col: 5 }],

@@ -197,6 +197,8 @@ function lemuen(bb, chess, def) {
         unit.mem.wantedInterval = num(t0.interval, 8);
         unit.mem.wantedScale = num(t0.damage_scale, 1);
         ensureWanted(battle).lemuens.add(unit);
+        // DEFAULT activation checks the initial range; wanted tiles must also trigger skills (#428).
+        unit.skill?.addTriggerRange(() => [{ keys: unit.extraRangeKeys || [], profile: unit.profile }]);
         let sig = null;
         battle.on('tick', () => { // wanted targets' tiles join her range (engine extra range keys, kept across rebuilds)
           if (!live(unit)) return;
