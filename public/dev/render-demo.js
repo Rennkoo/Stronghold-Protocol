@@ -113,9 +113,21 @@ async function main() {
   }
 
   let last = performance.now();
+  const measured = q.get('measure') === '1' ? new Float64Array(600) : null;
+  let measureCount = 0, measureAt = 0, measureText = '';
   const loop = (now) => {
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const elapsed = now - last;
+    const dt = Math.min(0.1, elapsed / 1000);
     last = now;
+    if (measured && elapsed > 0 && !document.hidden) {
+      measured[measureAt++ % measured.length] = elapsed;
+      measureCount = Math.min(measured.length, measureCount + 1);
+      if (measureAt % 30 === 0) {
+        const frames = Array.from(measured.subarray(0, measureCount)).sort((a, b) => a - b);
+        const avg = frames.reduce((sum, ms) => sum + ms, 0) / frames.length;
+        measureText = `\nwindow ${measureCount} frames · avg ${(1000 / avg).toFixed(1)} fps · p95 ${frames[Math.ceil(frames.length * 0.95) - 1].toFixed(2)} ms · resolution ${stResolution()}`;
+      }
+    }
     if (current?.tick) {
       try { current.tick(playing ? dt * speed : 0); } catch (err) { log('tick', err.message); }
       if (current.duration) {
@@ -125,10 +137,12 @@ async function main() {
     }
     const st = view.stats();
     $('stats').textContent = `fps ${st.fps.toFixed(0)}  frame ${st.frameMs.toFixed(1)} ms  units ${st.units}  particles ${st.particles}  proj ${st.projectiles}  nums ${st.numbers}\nspine ${st.spine ? `${st.spine.ready} ready / ${st.spine.loading} loading / ${st.spine.failed} failed` : '-'}  rate ${st.rate?.toFixed?.(2) ?? '-'}  buffered ${st.buffered}\nboard ${st.board3d?.on ? `3D · ${st.board3d.calls} calls · ${st.board3d.triangles} tris · ${st.board3d.cpuMs} ms` : '2D atlas'}`;
+    if (measured) $('stats').textContent += measureText;
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
   demo.ready = true;
+  function stResolution() { return view.stats().resolution ?? 'native'; }
 }
 
 // =============================================================================================================

@@ -1664,10 +1664,15 @@ export class DeviceView {
         this.box.mesh.zIndex = zKey;
       }
     }
-    const redraw = !this.box || this.turret || cam.version !== this.camVersion || shake || this.dying > 0 || this._lastShake;
+    // Static fallback crates keep their tessellated Graphics until geometry or camera changes.
+    const paintX = this.x + shake;
+    const redraw = this.turret || cam !== this._paintCam || cam.version !== this.camVersion ||
+      paintX !== this._paintX || this.y !== this._paintY || this.z !== this._paintZ ||
+      size !== this._paintSize || height !== this._paintHeight;
     if (redraw) {
+      this._paintCam = cam; this._paintX = paintX; this._paintY = this.y; this._paintZ = this.z;
+      this._paintSize = size; this._paintHeight = height;
       this.camVersion = cam.version;
-      this._lastShake = !!shake;
       g.clear();
       if (!this.box) drawCrate(g, cam, this.x + shake, this.y, this.z, size, height, 1);
       if (this.turret && height > 0.05) this._drawHead(g, cam, dt, height, k);
