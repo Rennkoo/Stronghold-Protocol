@@ -136,7 +136,7 @@ async function main() {
       }
     }
     const st = view.stats();
-    $('stats').textContent = `fps ${st.fps.toFixed(0)}  frame ${st.frameMs.toFixed(1)} ms  units ${st.units}  particles ${st.particles}  proj ${st.projectiles}  nums ${st.numbers}\nspine ${st.spine ? `${st.spine.ready} ready / ${st.spine.loading} loading / ${st.spine.failed} failed` : '-'}  rate ${st.rate?.toFixed?.(2) ?? '-'}  buffered ${st.buffered}\nboard ${st.board3d?.on ? `3D · ${st.board3d.calls} calls · ${st.board3d.triangles} tris · ${st.board3d.cpuMs} ms` : '2D atlas'}`;
+    $('stats').textContent = `fps ${st.fps.toFixed(0)}  frame ${st.frameMs.toFixed(1)} ms  cpu ${st.cpuMs?.toFixed(1)} ms  draw ${st.renderMs?.toFixed(1)} ms  lod ${st.lod}  atlas ${st.impostorAtlas?.pages}/${st.impostorAtlas?.drawn} slots ${st.impostorAtlas?.slots} full ${st.impostorAtlas?.full}  units ${st.units}  particles ${st.particles}  proj ${st.projectiles}  nums ${st.numbers}\nspine ${st.spine ? `${st.spine.ready} ready / ${st.spine.loading} loading / ${st.spine.failed} failed` : '-'}  rate ${st.rate?.toFixed?.(2) ?? '-'}  buffered ${st.buffered}\nboard ${st.board3d?.on ? `3D · ${st.board3d.calls} calls · ${st.board3d.triangles} tris · ${st.board3d.cpuMs} ms` : '2D atlas'}`;
     if (measured) $('stats').textContent += measureText;
     requestAnimationFrame(loop);
   };

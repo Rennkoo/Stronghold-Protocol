@@ -51,7 +51,7 @@ export class ImpostorAtlas {
     const erasers = new P.Container();
     const bodies = new P.Container();
     batch.addChild(erasers, bodies);
-    const page = { kind, size, rt, batch, erasers, bodies, shelves: [], nextY: 0, queued: 0, cleared: false, index: this.pages.length };
+    const page = { kind, size, rt, batch, erasers, bodies, shelves: [], nextY: 0, queued: 0, pending: [], cleared: false, index: this.pages.length };
     this.pages.push(page);
     this.stats.pages = this.pages.length;
     return page;
@@ -136,6 +136,7 @@ export class ImpostorAtlas {
     obj.scale.set(m.a, m.d);
     obj.visible = true;
     if (obj.parent !== page.bodies) page.bodies.addChild(obj);
+    page.pending.push({ obj, eraser: slot.eraser });
     page.queued++;
   }
 
@@ -150,9 +151,9 @@ export class ImpostorAtlas {
       } catch { /* lost context etc. */ }
       drawn += page.queued;
       page.queued = 0;
-      for (const e of page.erasers.children) e.visible = false;
-      // back to the parking lot until due again
-      for (const b of [...page.bodies.children]) this.park(b);
+      // Retain page membership; only queued bodies and erasers need hiding.
+      for (const work of page.pending) { work.eraser.visible = false; work.obj.visible = false; }
+      page.pending.length = 0;
     }
     this.stats.drawn = drawn;
   }

@@ -230,10 +230,16 @@ describe('impostor atlas allocator', () => {
       assert.equal(body.parent, c.page.bodies);
       atlas.flush();
       assert.deepEqual(rendered, [true]);
-      assert.equal(body.parent, atlas.parked);
+      assert.equal(body.parent, c.page.bodies, 'cached models retain their page between refreshes');
       assert.equal(body.visible, false);
+      let reparents = 0;
+      const addBody = c.page.bodies.addChild.bind(c.page.bodies);
+      c.page.bodies.addChild = (...args) => { reparents++; return addBody(...args); };
       atlas.draw(c, body, { a: 0.3, d: 0.3, tx: 40, ty: 90 });
       atlas.flush();
+      assert.equal(reparents, 0, 'refresh keeps container membership');
+      assert.equal(body.visible, false);
+      assert.equal(c.eraser.visible, false);
       assert.deepEqual(rendered, [true, false], 'later passes only erase their slots');
       // fill everything: eventually null, never throws
       let n = 0;
