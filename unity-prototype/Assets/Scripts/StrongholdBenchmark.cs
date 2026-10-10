@@ -27,7 +27,8 @@ public class StrongholdBenchmark : MonoBehaviour {
     StressEffects effects;
     int tick,boardTriangles,focusedSamples;
     float tickAccumulator,simulationTime;
-    float[] attackRemaining;
+    UnitAnimationDriver[] animationDrivers;
+    MeshRenderer[] actorRenderers;
     int[] hp;
     string status = "Warming up (30 seconds)", output;
     public int unitCount = 120;
@@ -91,7 +92,12 @@ public class StrongholdBenchmark : MonoBehaviour {
         if (failed > 0) status = "INVALID BENCHMARK: failed models " + failed;
         Debug.Log("Models initialized: units="+actors.Count+" models="+modelCount+" failures="+failed);
         if(workload != null && failed == 0) {
-            attackRemaining = new float[actors.Count]; hp = new int[actors.Count];
+            animationDrivers = new UnitAnimationDriver[actors.Count];
+            actorRenderers = new MeshRenderer[actors.Count]; hp = new int[actors.Count];
+            for(int i=0;i<actors.Count;i++) {
+                animationDrivers[i]=new UnitAnimationDriver(actors[i],entries[workload.units[i].model],workload.units[i].enemy);
+                actorRenderers[i]=actors[i].GetComponent<MeshRenderer>();
+            }
             for(int i=0;i<hp.Length;i++) hp[i]=workload.units[i].maxHp;
             effects = new GameObject("Pooled projectiles and numbers").AddComponent<StressEffects>();
             effects.Initialize(camera);
@@ -146,7 +152,7 @@ public class StrongholdBenchmark : MonoBehaviour {
             for(int i=0;i<actors.Count;i++) {
                 if(hp[i]<=0)hp[i]=workload.units[i].maxHp;
                 actors[i].transform.position=UnitPosition(workload.units[i],simulationTime);
-                actors[i].GetComponent<MeshRenderer>().sortingOrder=20000-Mathf.RoundToInt(actors[i].transform.position.z*100);
+                actorRenderers[i].sortingOrder=20000-Mathf.RoundToInt(actors[i].transform.position.z*100);
             }
             foreach(var ev in frame.events) {
                 int a=ev.a-1,b=ev.b-1;
@@ -154,20 +160,13 @@ public class StrongholdBenchmark : MonoBehaviour {
                 effects.Emit(ev.kind,from,to,ev.value,ev.style,ev.type);
                 if(ev.kind=="attack") {
                     hp[b]-=ev.value;effects.Emit("damage",to,to,ev.value,null,ev.type);
-                    var actor=actors[a];var model=entries[workload.units[a].model];
-                    var anim=actor.Skeleton.Data.FindAnimation(model.attack);
-                    if(anim!=null){actor.AnimationState.SetAnimation(0,anim,false);attackRemaining[a]=Mathf.Max(.08f,anim.Duration);}
+                    animationDrivers[a].Attack();
                 } else if(ev.kind=="heal") hp[b]=Mathf.Min(workload.units[b].maxHp,hp[b]+ev.value);
                 else if(ev.kind=="skill") {
-                    var actor=actors[a];var model=entries[workload.units[a].model];
-                    if(!string.IsNullOrEmpty(model.skill)){var anim=actor.Skeleton.Data.FindAnimation(model.skill);if(anim!=null){actor.AnimationState.SetAnimation(0,anim,false);attackRemaining[a]=Mathf.Max(.2f,anim.Duration);}}
+                    animationDrivers[a].Skill();
                 }
             }
             tick=(tick+1)%workload.ticks.Length;
-        }
-        for(int i=0;i<actors.Count;i++) if(attackRemaining[i]>0) {
-            attackRemaining[i]-=dt;
-            if(attackRemaining[i]<=0){var model=entries[workload.units[i].model];actors[i].AnimationState.SetAnimation(0,workload.units[i].enemy?model.move:model.idle,true);}
         }
     }
     void CreateBoard() {

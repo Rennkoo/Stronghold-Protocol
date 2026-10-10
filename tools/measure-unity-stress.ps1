@@ -7,6 +7,8 @@ New-Item -ItemType Directory -Force $destination | Out-Null
 $results=@()
 for($run=1;$run -le $Runs;$run++) {
     $log=Join-Path $destination ("run-$run.log")
+    # A prior run's Result line must never be accepted as this process's measurement.
+    if(Test-Path -LiteralPath $log){Remove-Item -LiteralPath $log}
     $launchArgs=@('-screen-width','1920','-screen-height','1080','-screen-fullscreen','0','-benchmark-samples',"$Samples",'-logFile',('"'+$log+'"'))
     $process=Start-Process -FilePath $exe -ArgumentList $launchArgs -WindowStyle Hidden -PassThru
     $deadline=(Get-Date).AddMinutes(5)
