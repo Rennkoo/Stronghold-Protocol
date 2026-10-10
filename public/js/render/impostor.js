@@ -36,7 +36,11 @@ export class ImpostorAtlas {
     this.parked = new this.P.Container(); // skeletons of impostor units (never rendered directly)
     this.parked.visible = false;
     this.stats = { pages: 0, slots: 0, drawn: 0, full: 0 };
+    this.phase = 0;
   }
+
+  /** Consecutive phases spread a crowd evenly across any refresh interval (random phases caused spikes). */
+  nextPhase() { return this.phase++; }
 
   /** CSS px per side of a page of `kind`. */
   sizeOf(kind) { return Math.floor(PAGE_PX[kind] / this.res); }

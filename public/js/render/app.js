@@ -1531,6 +1531,14 @@ export async function createFieldView(host, options = {}) {
 
   let clock = 0;
   let cpuMs = 0;
+  const stages = options.profile ? { board: 0, state: 0, units: 0, fx: 0, atlas: 0 } : null;
+  let stageAt = 0;
+  function markStage(key) {
+    if (!stages) return;
+    const now = performance.now();
+    stages[key] = stages[key] * 0.9 + (now - stageAt) * 0.1;
+    stageAt = now;
+  }
   let frameNo = 0;
   let impInterval = 0;
   let vp = { width: s0.width, height: s0.height };   // viewport (CSS px) of this frame: unit culling
@@ -1593,6 +1601,7 @@ export async function createFieldView(host, options = {}) {
     clock += dt;
     if ((globalThis.devicePixelRatio || 1) !== lastDpr) { lastDpr = globalThis.devicePixelRatio || 1; resize(); }
     try {
+      if (stages) stageAt = performance.now();
       stepCamera(now);
       if (board3d) {
         if (board3d.lost) onBoard3dLost();
@@ -1600,6 +1609,7 @@ export async function createFieldView(host, options = {}) {
       }
       tiles.project(cam);
       updateBackdrop(clock);
+      markStage('board');
       if (mode === 'battle') {
         const renderT = interp.update(now / 1000);
         if (Number.isFinite(renderT)) {
@@ -1616,6 +1626,7 @@ export async function createFieldView(host, options = {}) {
           }
         }
       }
+      markStage('state');
       for (const [key, v] of views) {
         if (v._tween) {
           const tw = v._tween;
@@ -1629,9 +1640,12 @@ export async function createFieldView(host, options = {}) {
       }
       if (!penHidden) for (const v of penViews.values()) v.update(dt, cam, clock);
       if (leader && !leaderHidden) leader.view.update(dt, cam, clock);
+      markStage('units');
       tiles.update(dt);
       fx.update(dt);
+      markStage('fx');
       impostors.flush();
+      markStage('atlas');
     } catch (err) {
       if (!frame.warned) { frame.warned = true; console.error('[render] frame failed', err); }
     }
@@ -1841,6 +1855,7 @@ export async function createFieldView(host, options = {}) {
         fps: Math.round(fps * 10) / 10, frameMs: Math.round(frameMs * 100) / 100, cpuMs: Math.round(cpuMs * 100) / 100, renderMs: Math.round(renderMs * 100) / 100, mode, units: views.size, impostor: impInterval, impostorAtlas: { ...impostors.stats }, boardArt: !!tiles.atlas.art,
         board3d: board3d ? { on: true, ...board3d.stats(), losses: recover.count } : { on: false, error: board3dError, recovering: !!recover.timer, losses: recover.count },
         pen: penViews.size, prepField: prepXf.kind === 'bossPrep' ? prepXf.side : null, lod: loadLevel, culled: culledCount,
+        stages: stages ? { ...stages } : null,
         resolution: app.renderer.resolution, boardResolution: boardDpr(),
         ...fx.counts, spine: assets.spine?.stats ? assets.spine.stats() : null, renderT: interp.renderT, rate: interp.rate,
         buffered: interp.size, camera: cam.params(),

@@ -4,6 +4,21 @@ import { adaptiveResolution } from '../../public/js/render/resolution.js';
 import { DeviceView } from '../../public/js/render/units.js';
 import { presetCamera } from '../../public/js/render/projection.js';
 import { installFakePixi, fakeViewCtx } from './fakepixi.js';
+import { ImpostorAtlas } from '../../public/js/render/impostor.js';
+
+test('a 120-unit crowd distributes scheduled skeleton refreshes evenly instead of random spikes', () => {
+  const fake = installFakePixi();
+  try {
+    const atlas = new ImpostorAtlas({ resolution: 1 });
+    const phases = Array.from({ length: 120 }, () => atlas.nextPhase());
+    for (let interval = 2; interval <= 6; interval++) {
+      const frames = Array.from({ length: interval }, (_, frame) => phases.filter(p => (p + frame) % interval === 0).length);
+      assert.equal(frames.reduce((a, b) => a + b), 120, 'each unit refreshes exactly once per interval');
+      assert.ok(Math.max(...frames) - Math.min(...frames) <= 1, 'no crowded refresh frame');
+    }
+    atlas.destroy();
+  } finally { fake.restore(); }
+});
 
 test('sustained load lowers raster pixels and recovery restores the chosen resolution', () => {
   const base = 2;

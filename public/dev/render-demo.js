@@ -45,6 +45,7 @@ async function main() {
   await assets.ready();
   const index = await fetch('/dev/recordings/index.json').then((r) => (r.ok ? r.json() : []), () => []);
   const view = await createFieldView($('field'), {
+    profile: q.get('measure') === '1',
     data, assets, settings: { quality: q.get('quality') || 'high', damageNumbers: true },
     ...(q.has('aa') ? { antialias: q.get('aa') !== '0' } : {}),
   });
@@ -137,7 +138,7 @@ async function main() {
     }
     const st = view.stats();
     $('stats').textContent = `fps ${st.fps.toFixed(0)}  frame ${st.frameMs.toFixed(1)} ms  cpu ${st.cpuMs?.toFixed(1)} ms  draw ${st.renderMs?.toFixed(1)} ms  lod ${st.lod}  atlas ${st.impostorAtlas?.pages}/${st.impostorAtlas?.drawn} slots ${st.impostorAtlas?.slots} full ${st.impostorAtlas?.full}  units ${st.units}  particles ${st.particles}  proj ${st.projectiles}  nums ${st.numbers}\nspine ${st.spine ? `${st.spine.ready} ready / ${st.spine.loading} loading / ${st.spine.failed} failed` : '-'}  rate ${st.rate?.toFixed?.(2) ?? '-'}  buffered ${st.buffered}\nboard ${st.board3d?.on ? `3D · ${st.board3d.calls} calls · ${st.board3d.triangles} tris · ${st.board3d.cpuMs} ms` : '2D atlas'}`;
-    if (measured) $('stats').textContent += measureText;
+    if (measured) $('stats').textContent += measureText + (st.stages ? '\nstages ' + Object.entries(st.stages).map(([k, v]) => k + ':' + v.toFixed(2)).join(' ') : '');
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

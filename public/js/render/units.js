@@ -1371,7 +1371,7 @@ export class UnitView {
       if (this.actor.spine.parent) this.actor.spine.parent.removeChild(this.actor.spine);
       if (atlas) atlas.park(this.actor.spine);
       this.body.addChild(sprite);
-      this.imp = { sprite, slot: null, rt: null, sc: 0, acc: 0, phase: (Math.random() * 64) | 0, dirty: true };
+      this.imp = { sprite, slot: null, rt: null, sc: 0, acc: 0, phase: atlas?.nextPhase?.() ?? ((Math.random() * 64) | 0), dirty: true };
     }
     const imp = this.imp;
     imp.acc += animDt;
