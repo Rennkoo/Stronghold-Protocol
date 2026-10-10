@@ -15,6 +15,10 @@ public static class PrototypeBuild {
         }
         retainedMaterial.EnableKeyword("_STRAIGHT_ALPHA_INPUT");
         EditorUtility.SetDirty(retainedMaterial);
+        foreach(var shaderName in new[] {"Spine/Skeleton","Stronghold/Board","Stronghold/Effects"}) {
+            var keepPath="Assets/Resources/Keep"+shaderName.Replace("/","")+".mat";
+            if(!AssetDatabase.LoadAssetAtPath<Material>(keepPath))AssetDatabase.CreateAsset(new Material(Shader.Find(shaderName)),keepPath);
+        }
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         new GameObject("Stronghold Benchmark").AddComponent<StrongholdBenchmark>();
         System.IO.Directory.CreateDirectory("Assets/Scenes");

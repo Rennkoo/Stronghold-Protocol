@@ -4,12 +4,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using Spine.Unity;
 
-[Serializable] public class BenchmarkModel { public string id, path, idle, attack; public bool pma; }
+[Serializable] public class BenchmarkModel { public string id, path, idle, move, attack, skill; public bool pma; }
 [Serializable] public class BenchmarkModels { public BenchmarkModel[] models; }
 [Serializable] public class BenchmarkResult {
     public string unity, device, gpu, utc, scene = "120 skeletons; synthetic board; no combat simulation";
     public int units, uniqueModels, width, height, samples;
     public double fps, p50Ms, p95Ms, p99Ms;
+    public int effectsEmitted,effectsDropped,peakEffects,boardTriangles,focusedSamples;
 }
 
 public class StrongholdBenchmark : MonoBehaviour {
@@ -18,12 +19,23 @@ public class StrongholdBenchmark : MonoBehaviour {
     readonly List<UnityEngine.Object> owned = new List<UnityEngine.Object>();
     float elapsed, attackClock;
     int modelCount, failed;
-    bool saved;
+    bool saved,initialized;
+    int sampleCount=3600;
     Camera renderCamera;
+    StressWorkload workload;
+    BenchmarkModel[] entries;
+    StressEffects effects;
+    int tick,boardTriangles,focusedSamples;
+    float tickAccumulator,simulationTime;
+    float[] attackRemaining;
+    int[] hp;
     string status = "Warming up (30 seconds)", output;
     public int unitCount = 120;
 
     void Start() {
+        var args=Environment.GetCommandLineArgs();
+        int sampleArg=Array.IndexOf(args,"-benchmark-samples");
+        if(sampleArg>=0 && sampleArg+1<args.Length && int.TryParse(args[sampleArg+1],out int requested))sampleCount=Mathf.Clamp(requested,600,3600);
         QualitySettings.vSyncCount = 0;
         Application.targetFrameRate = -1;
         Application.runInBackground = true;
@@ -32,14 +44,18 @@ public class StrongholdBenchmark : MonoBehaviour {
         camera.orthographic = true; camera.orthographicSize = 5.4f;
         camera.transform.position = new Vector3(9.5f, 3.1f, -20);
         camera.backgroundColor = new Color(.055f,.065f,.085f);
-        CreateBoard();
-        var manifest = Resources.Load<TextAsset>("models");
+        camera.clearFlags = CameraClearFlags.SolidColor;
+        var stress = Array.IndexOf(args,"-simple")>=0 ? null : Resources.Load<TextAsset>("stress");
+        if(stress) workload = JsonUtility.FromJson<StressWorkload>(stress.text);
+        if(workload != null) CreateStressBoard(camera); else CreateBoard();
+        var manifest = Resources.Load<TextAsset>(workload != null ? "models" : "simple-models") ?? Resources.Load<TextAsset>("models");
         if (!manifest) throw new Exception("Missing model manifest: run prepare-unity.mjs");
-        var entries = JsonUtility.FromJson<BenchmarkModels>(manifest.text).models;
+        entries = JsonUtility.FromJson<BenchmarkModels>(manifest.text).models;
         if (entries == null || entries.Length == 0) throw new Exception("No real skeleton assets available");
         var loaded = new Dictionary<string, SkeletonDataAsset>();
         for (int i=0; i<unitCount; i++) {
-            var entry = entries[i % entries.Length];
+            var unit = workload != null ? workload.units[i] : null;
+            var entry = entries[unit != null ? unit.model : i % entries.Length];
             try {
                 if (!loaded.TryGetValue(entry.id, out var data)) {
                     var atlasText = Resources.Load<TextAsset>(entry.path + "/atlas");
@@ -54,20 +70,105 @@ public class StrongholdBenchmark : MonoBehaviour {
                     owned.Add(material);
                     var atlas = SpineAtlasAsset.CreateRuntimeInstance(atlasText, textures, material, true);
                     owned.Add(atlas);
-                    data = SkeletonDataAsset.CreateRuntimeInstance(skeleton, atlas, true, .004f);
+                    data = SkeletonDataAsset.CreateRuntimeInstance(skeleton, atlas, true, workload != null ? workload.modelScale : .004f);
                     if (data.GetSkeletonData(true) == null) throw new Exception("Skeleton decode failed: " + entry.id);
                     owned.Add(data); loaded.Add(entry.id, data);
                 }
                 var actor = SkeletonAnimation.NewSkeletonAnimationGameObject(data);
                 actor.name = "Unit " + i + " " + entry.id;
-                actor.transform.position = new Vector3((i%20), (5-i/20)*1.05f, 0);
+                if(unit != null) {
+                    actor.transform.position = UnitPosition(unit, 0);
+                    actor.transform.rotation = camera.transform.rotation;
+                    actor.transform.localScale = new Vector3(unit.facing*unit.scale,unit.scale*unit.scaleY,1);
+                } else actor.transform.position = new Vector3((i%20), (5-i/20)*1.05f, 0);
                 actor.GetComponent<MeshRenderer>().sortingOrder = i;
-                actor.AnimationState.SetAnimation(0, entry.idle, true).TrackTime = i*.173f;
+                actor.AnimationState.Data.DefaultMix = .1f;
+                actor.AnimationState.SetAnimation(0, unit != null && unit.enemy ? entry.move : entry.idle, true).TrackTime = i*.173f;
                 actors.Add(actor);
             } catch (Exception e) { failed++; Debug.LogException(e); }
         }
         modelCount = loaded.Count;
         if (failed > 0) status = "INVALID BENCHMARK: failed models " + failed;
+        Debug.Log("Models initialized: units="+actors.Count+" models="+modelCount+" failures="+failed);
+        if(workload != null && failed == 0) {
+            attackRemaining = new float[actors.Count]; hp = new int[actors.Count];
+            for(int i=0;i<hp.Length;i++) hp[i]=workload.units[i].maxHp;
+            effects = new GameObject("Pooled projectiles and numbers").AddComponent<StressEffects>();
+            effects.Initialize(camera);
+            var transforms=new Transform[actors.Count];for(int i=0;i<actors.Count;i++)transforms[i]=actors[i].transform;
+            effects.SetBars(transforms,hp,workload.units);
+        }
+        initialized=true;
+    }
+    Vector3 UnitPosition(StressUnit unit,float time) {
+        float x=unit.x,y=unit.y;
+        if(unit.enemy) {x=1+((unit.x-time*.35f+40)%19);y+=Mathf.Sin(time+unit.id)*.25f;}
+        x=Mathf.Round(x*100)/100;y=Mathf.Round(y*100)/100;
+        float height=0;
+        int row=Mathf.RoundToInt(y),col=Mathf.RoundToInt(x);
+        foreach(var tile in workload.terrain) if(tile.x==col && tile.y==row) {height=tile.z;break;}
+        return StressWorkload.World(x,y,height+.025f);
+    }
+    void CreateStressBoard(Camera camera) {
+        var c=workload.camera;
+        camera.orthographic=false;camera.fieldOfView=c.fov;
+        camera.nearClipPlane=c.near;camera.farClipPlane=c.far;
+        camera.transform.position=StressWorkload.World(c.position);
+        camera.transform.rotation=Quaternion.LookRotation(StressWorkload.World(c.target)-camera.transform.position,StressWorkload.World(c.up));
+        unitCount=workload.units.Length;
+        foreach(var bucket in workload.buckets) {
+            int count=bucket.position.Length/3;
+            var positions=new Vector3[count];var normals=new Vector3[count];var uv=new Vector2[count];var colors=new Color[count];
+            for(int i=0;i<count;i++) {
+                positions[i]=StressWorkload.World(bucket.position[i*3],bucket.position[i*3+1],bucket.position[i*3+2]);
+                normals[i]=StressWorkload.World(bucket.normal[i*3],bucket.normal[i*3+1],bucket.normal[i*3+2]);
+                uv[i]=new Vector2(bucket.uv[i*2],bucket.uv[i*2+1]);
+                colors[i]=new Color(bucket.color[i*3],bucket.color[i*3+1],bucket.color[i*3+2]);
+            }
+            // Swapping Y/Z changes handedness; reverse each triangle to preserve outward-facing surfaces.
+            var indices=(int[])bucket.index.Clone();for(int i=0;i<indices.Length;i+=3){int swap=indices[i+1];indices[i+1]=indices[i+2];indices[i+2]=swap;}
+            var mesh=new Mesh {name="Web board "+bucket.name,indexFormat=UnityEngine.Rendering.IndexFormat.UInt32};
+            mesh.vertices=positions;mesh.normals=normals;mesh.uv=uv;mesh.colors=colors;mesh.triangles=indices;mesh.RecalculateBounds();owned.Add(mesh);
+            boardTriangles+=indices.Length/3;
+            var material=new Material(Shader.Find("Stronghold/Board"));owned.Add(material);
+            material.mainTexture=bucket.name=="pipe"?Texture2D.whiteTexture:Resources.Load<Texture2D>(bucket.name=="decal"?"Board/common":"Board/D");
+            if(bucket.name=="board")material.SetTexture("_EmissionTex",Resources.Load<Texture2D>("Board/E"));
+            if(bucket.name=="glass")material.SetColor("_Color",new Color(.65f,.75f,.85f));
+            var go=new GameObject("Board "+bucket.name);go.AddComponent<MeshFilter>().sharedMesh=mesh;go.AddComponent<MeshRenderer>().sharedMaterial=material;
+        }
+    }
+    void StepStress(float dt) {
+        if(!effects || failed>0)return;
+        tickAccumulator+=dt;
+        while(tickAccumulator>=.05f) {
+            tickAccumulator-=.05f;
+            var frame=workload.ticks[tick];simulationTime=frame.gt;
+            for(int i=0;i<actors.Count;i++) {
+                if(hp[i]<=0)hp[i]=workload.units[i].maxHp;
+                actors[i].transform.position=UnitPosition(workload.units[i],simulationTime);
+                actors[i].GetComponent<MeshRenderer>().sortingOrder=20000-Mathf.RoundToInt(actors[i].transform.position.z*100);
+            }
+            foreach(var ev in frame.events) {
+                int a=ev.a-1,b=ev.b-1;
+                var from=actors[a].transform.position+Vector3.up*.45f;var to=actors[b].transform.position+Vector3.up*.45f;
+                effects.Emit(ev.kind,from,to,ev.value,ev.style,ev.type);
+                if(ev.kind=="attack") {
+                    hp[b]-=ev.value;effects.Emit("damage",to,to,ev.value,null,ev.type);
+                    var actor=actors[a];var model=entries[workload.units[a].model];
+                    var anim=actor.Skeleton.Data.FindAnimation(model.attack);
+                    if(anim!=null){actor.AnimationState.SetAnimation(0,anim,false);attackRemaining[a]=Mathf.Max(.08f,anim.Duration);}
+                } else if(ev.kind=="heal") hp[b]=Mathf.Min(workload.units[b].maxHp,hp[b]+ev.value);
+                else if(ev.kind=="skill") {
+                    var actor=actors[a];var model=entries[workload.units[a].model];
+                    if(!string.IsNullOrEmpty(model.skill)){var anim=actor.Skeleton.Data.FindAnimation(model.skill);if(anim!=null){actor.AnimationState.SetAnimation(0,anim,false);attackRemaining[a]=Mathf.Max(.2f,anim.Duration);}}
+                }
+            }
+            tick=(tick+1)%workload.ticks.Length;
+        }
+        for(int i=0;i<actors.Count;i++) if(attackRemaining[i]>0) {
+            attackRemaining[i]-=dt;
+            if(attackRemaining[i]<=0){var model=entries[workload.units[i].model];actors[i].AnimationState.SetAnimation(0,workload.units[i].enemy?model.move:model.idle,true);}
+        }
     }
     void CreateBoard() {
         var texture = new Texture2D(1,1); texture.SetPixel(0,0,Color.white); texture.Apply(); owned.Add(texture);
@@ -81,8 +182,10 @@ public class StrongholdBenchmark : MonoBehaviour {
         }
     }
     void Update() {
+        if(!initialized)return;
         float dt=Time.unscaledDeltaTime; elapsed+=dt; attackClock+=dt;
-        if(attackClock>=2) {
+        if(workload != null) StepStress(dt);
+        else if(attackClock>=2) {
             attackClock=0;
             // Keep a repeatable mixture of idle and attack animations without a simulation or RNG.
             foreach(var actor in actors) {
@@ -92,8 +195,9 @@ public class StrongholdBenchmark : MonoBehaviour {
         }
         if(elapsed>=30 && !saved && failed==0) {
             frames.Add(dt*1000);
-            status="Recording " + frames.Count + "/3600 frames";
-            if(frames.Count>=3600) SaveResult();
+            if(Application.isFocused) focusedSamples++;
+            status="Recording " + frames.Count + "/"+sampleCount+" frames";
+            if(frames.Count>=sampleCount) SaveResult();
         }
     }
     void SaveResult() {
@@ -104,7 +208,10 @@ public class StrongholdBenchmark : MonoBehaviour {
             unity=Application.unityVersion,device=SystemInfo.processorType,gpu=SystemInfo.graphicsDeviceName,
             utc=DateTime.UtcNow.ToString("O"),units=actors.Count,uniqueModels=modelCount,
             width=Screen.width,height=Screen.height,samples=frames.Count,
-            fps=frames.Count*1000/total,p50Ms=Percentile(.50),p95Ms=Percentile(.95),p99Ms=Percentile(.99)
+            fps=frames.Count*1000/total,p50Ms=Percentile(.50),p95Ms=Percentile(.95),p99Ms=Percentile(.99),
+            scene=workload != null ? "Web stress units/events + exported board geometry/atlases; simplified Unity FX/materials; no combat simulation" : "120 skeletons; synthetic board; no combat simulation",
+            effectsEmitted=effects?effects.emitted:0,effectsDropped=effects?effects.dropped:0,peakEffects=effects?effects.peak:0,
+            boardTriangles=boardTriangles,focusedSamples=focusedSamples
         };
         output=Path.Combine(Application.persistentDataPath,"benchmark-"+DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")+".json");
         File.WriteAllText(output,JsonUtility.ToJson(result,true));
@@ -128,7 +235,7 @@ public class StrongholdBenchmark : MonoBehaviour {
     void OnGUI() {
         GUI.Box(new Rect(12,12,680,95),"Unity rendering prototype (not the full game)");
         GUI.Label(new Rect(25,38,650,25),"Units: "+actors.Count+"; models: "+modelCount+"; failures: "+failed+" | "+status);
-        GUI.Label(new Rect(25,65,650,30),output ?? "30s warmup + 3600 frames. Compare Windows build, not Editor FPS.");
+        GUI.Label(new Rect(25,65,650,30),output ?? (workload != null ? "Web stress: 178 tiles + projectiles + damage/heal numbers; pooled FX" : "30s warmup + 3600 frames. Compare Windows build, not Editor FPS."));
     }
     void OnDestroy() { foreach(var o in owned) if(o) Destroy(o); }
 }

@@ -24,5 +24,5 @@ for(const [id,entry] of candidates) {
 }
 if(models.length===0) throw new Error('No locally available Spine models; download project assets first.');
 await mkdir(resolve(project,'Assets/Resources'),{recursive:true});
-await writeFile(resolve(project,'Assets/Resources/models.json'),JSON.stringify({models},null,2));
+await writeFile(resolve(project,'Assets/Resources/simple-models.json'),JSON.stringify({models},null,2));
 console.log(`Prepared ${models.length} real Spine models in ${project}`);
