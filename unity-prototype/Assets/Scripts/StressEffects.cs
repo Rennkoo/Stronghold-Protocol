@@ -4,7 +4,7 @@ using UnityEngine.Rendering;
 
 // Fixed-capacity particles + one retained dynamic mesh: no per-event GameObjects or materials.
 public sealed class StressEffects : MonoBehaviour {
-    struct Particle {public int kind,glyph;public Vector3 from,to;public float age,life,size;public Color color;public string digits;}
+    struct Particle {public int kind,glyph,digitCount;public ulong digits;public Vector3 from,to;public float age,life,size;public Color color;}
     readonly Particle[] pool=new Particle[2048];
     readonly ParticleSlots slots=new ParticleSlots(2048);
     readonly Vector2[] ring=new Vector2[20];
@@ -42,7 +42,7 @@ public sealed class StressEffects : MonoBehaviour {
         int slot=slots.Acquire();
         if(slot<0){dropped++;return;}
         var p=new Particle {from=from,to=to,age=0,life=.7f,color=Color.white,size=.16f,glyph=11};
-        if(kind=="damage"||kind=="heal"){p.kind=1;p.digits=value.ToString();p.from+=Vector3.up*.8f;p.color=kind=="heal"?new Color(.35f,1,.55f):type=="arts"?new Color(.5f,.75f,1):new Color(1,.85f,.4f);}
+        if(kind=="damage"||kind=="heal"){p.kind=1;long magnitude=DamageDigits.Magnitude(value);p.digitCount=DamageDigits.Count(magnitude);p.digits=DamageDigits.Pack(magnitude);p.from+=Vector3.up*.8f;p.color=kind=="heal"?new Color(.35f,1,.55f):type=="arts"?new Color(.5f,.75f,1):new Color(1,.85f,.4f);}
         else if(kind=="skill"){p.kind=2;p.life=.5f;p.color=new Color(.35f,.9f,1);}
         else {p.kind=style=="chain"?3:0;p.life=style=="chain"?.12f:style=="bomb"?.45f:.25f;p.size=style=="orb"||style=="bomb"?.18f:.09f;p.color=style=="bolt"?new Color(.4f,.7f,1):new Color(1,.7f,.3f);}
         pool[slot]=p;emitted++;
@@ -66,7 +66,10 @@ public sealed class StressEffects : MonoBehaviour {
             var p=pool[i];p.age+=deltaTime;
             if(p.age>=p.life){p.life=0;pool[i]=p;slots.Release(i);i=following;continue;}pool[i]=p;active++;
             float t=p.age/p.life;Color c=p.color;c.a=1-t;
-            if(p.kind==1){var pos=p.from+up*t*.6f;for(int k=0;k<p.digits.Length;k++)Quad(pos+right*(k-p.digits.Length*.5f)*.12f,right*.06f,up*.15f,p.digits[k]-'0',c);}
+            if(p.kind==1){
+                var pos=p.from+up*t*.6f;
+                for(int k=0;k<p.digitCount;k++){int digit=(int)((p.digits>>((p.digitCount-1-k)*4))&15);Quad(pos+right*(k-p.digitCount*.5f)*.12f,right*.06f,up*.15f,digit,c);}
+            }
             else if(p.kind==2){float radius=.2f+t*.7f;for(int k=0;k<20;k++)Quad(p.from+right*ring[k].x*radius+up*ring[k].y*radius,right*.025f,up*.025f,10,c);}
             else if(p.kind==3){var delta=p.to-p.from;for(int k=0;k<12;k++)Quad(p.from+delta*(k/11f),right*.04f,up*.04f,11,c);}
             else {var pos=Vector3.Lerp(p.from,p.to,t)+Vector3.up*(p.life>.4f?Mathf.Sin(t*Mathf.PI)*.7f:0);Quad(pos,right*p.size,up*p.size,11,c);}

@@ -45,6 +45,8 @@ Unity Hub 添加本目录，使用 Unity 6000.6.5f1。菜单 `Stronghold/Create 
 
 ## 后续验收
 
+伤害/治疗数字在事件产生时编码为紧凑字形序列，避免每个事件的 ToString 字符串分配；每帧直接读取字形，保留原布局。零值、十进制边界和 int 极值由 EffectsValidation 覆盖。Editor 隔离 CPU 对照有明显波动，不能用该局部成绩推断完整游戏稳定达到 60 FPS。
+
 特效优化保留了原槽位绘制顺序，并复用索引/UV/圆环参数。`PrototypeBuild.ValidateAndBuild` 会同时验证粒子槽位回收和网格有效前缀。`tools/measure-unity-stress.ps1` 支持 `-Executable` 指定旧构建、`-Label` 区分结果，便于交替对照；标签仅允许字母、数字和连字符。
 
 `tools/benchmark-unity-effects.ps1 -UnityEditor <Unity.exe路径>` 可从指定旧提交生成临时特效参考实现，对比固定输入下的 Editor CPU 耗时与末帧几何，完成后自动清理参考代码。此成绩不代表游戏 FPS。最近的四轮原生 A/B 测试未确认整体帧率提高；隔离 CPU 复测改善约 8%，原始记录见 [特效对照数据](../docs/performance/unity-effects-20261010.json)。

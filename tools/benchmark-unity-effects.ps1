@@ -6,7 +6,10 @@ New-Item -ItemType Directory -Force $folder | Out-Null
 if($Reference -notmatch '^[a-fA-F0-9]{7,40}$'){throw 'Reference must be a commit SHA'}
 $source=(& git -C $repo show "$($Reference):unity-prototype/Assets/Scripts/StressEffects.cs") -join "`n"
 if($LASTEXITCODE -ne 0){throw 'Cannot read reference effects implementation'}
-$source=$source.Replace('public sealed class StressEffects','public sealed class EffectsReference').Replace('Time.unscaledDeltaTime','deltaTime').Replace('void LateUpdate() {',"void LateUpdate() { AdvanceAndRender(Time.unscaledDeltaTime); }`n    public void AdvanceAndRender(float deltaTime) {")
+$source=$source.Replace('public sealed class StressEffects','public sealed class EffectsReference')
+if(!$source.Contains('public void AdvanceAndRender(float deltaTime)')){
+    $source=$source.Replace('Time.unscaledDeltaTime','deltaTime').Replace('void LateUpdate() {',"void LateUpdate() { AdvanceAndRender(Time.unscaledDeltaTime); }`n    public void AdvanceAndRender(float deltaTime) {")
+}
 [IO.File]::WriteAllText((Join-Path $folder 'EffectsReference.cs'),$source,[Text.UTF8Encoding]::new($false))
 $destination=Join-Path $repo '.cache/unity-effects-cpu'
 New-Item -ItemType Directory -Force $destination | Out-Null

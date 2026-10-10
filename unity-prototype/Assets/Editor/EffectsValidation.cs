@@ -3,6 +3,14 @@ using UnityEngine;
 
 public static class EffectsValidation {
     public static void Run() {
+        foreach(int value in new[]{0,1,9,10,99,100,149,9999,10000,int.MaxValue,int.MinValue}){
+            long magnitude=DamageDigits.Magnitude(value);string expected=magnitude.ToString();
+            Require(DamageDigits.Count(magnitude)==expected.Length,"Digit count including zero and integer limits");
+            long divisor=DamageDigits.Divisor(expected.Length);
+            ulong packed=DamageDigits.Pack(magnitude);
+            for(int i=0;i<expected.Length;i++)Require((int)((packed>>((expected.Length-1-i)*4))&15)==expected[i]-'0',"Packed glyphs preserve decimal order");
+            for(int i=0;i<expected.Length;i++){Require(magnitude/divisor%10==expected[i]-'0',"Numeric digits preserve decimal order");divisor/=10;}
+        }
         const int capacity=32;
         var slots=new ParticleSlots(capacity);
         var occupied=new bool[capacity];int cursor=0,count=0;

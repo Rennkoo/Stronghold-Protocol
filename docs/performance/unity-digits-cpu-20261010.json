@@ -1,0 +1,32 @@
+{
+    "unity": "6000.6.5f1",
+    "scope": "Editor CPU only; 120 bars; deterministic 60Hz FX input; not whole-game FPS",
+    "samples": 600,
+    "identicalGeometry": true,
+    "trials": [
+        {
+            "variant": "old",
+            "msPerFrame": 0.18356233333333333,
+            "vertices": 4152,
+            "indices": 6228
+        },
+        {
+            "variant": "new",
+            "msPerFrame": 0.19898483333333333,
+            "vertices": 4152,
+            "indices": 6228
+        },
+        {
+            "variant": "new",
+            "msPerFrame": 0.18044266666666667,
+            "vertices": 4152,
+            "indices": 6228
+        },
+        {
+            "variant": "old",
+            "msPerFrame": 0.17984733333333333,
+            "vertices": 4152,
+            "indices": 6228
+        }
+    ]
+}
