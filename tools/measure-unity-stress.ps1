@@ -1,12 +1,14 @@
-param([int]$Runs=3,[int]$Samples=3600)
+param([int]$Runs=3,[int]$Samples=3600,[string]$Executable='',[string]$Label='run')
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $exe=Join-Path $repo 'unity-prototype/Builds/Windows/StrongholdBenchmark.exe'
+if($Executable){$exe=(Resolve-Path -LiteralPath $Executable).Path}
+if($Label -notmatch '^[a-zA-Z0-9-]+$'){throw 'Label must contain only letters, digits and hyphens'}
 $destination=Join-Path $repo '.cache/unity-measurements'
 New-Item -ItemType Directory -Force $destination | Out-Null
 $results=@()
 for($run=1;$run -le $Runs;$run++) {
-    $log=Join-Path $destination ("run-$run.log")
+    $log=Join-Path $destination ("$Label-$run.log")
     # A prior run's Result line must never be accepted as this process's measurement.
     if(Test-Path -LiteralPath $log){Remove-Item -LiteralPath $log}
     $launchArgs=@('-screen-width','1920','-screen-height','1080','-screen-fullscreen','0','-benchmark-samples',"$Samples",'-logFile',('"'+$log+'"'))
@@ -24,8 +26,8 @@ for($run=1;$run -le $Runs;$run++) {
                     if(!(Test-Path $image)){Start-Sleep -Milliseconds 200;continue}
                     $result=Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
                     if($result.units -ne 120 -or $result.uniqueModels -ne 59 -or $result.effectsDropped -ne 0){throw 'Invalid benchmark: workload mismatch or FX pool overflow'}
-                    Copy-Item -LiteralPath $path -Destination (Join-Path $destination "run-$run.json")
-                    Copy-Item -LiteralPath $image -Destination (Join-Path $destination "run-$run.png")
+                    Copy-Item -LiteralPath $path -Destination (Join-Path $destination "$Label-$run.json")
+                    Copy-Item -LiteralPath $image -Destination (Join-Path $destination "$Label-$run.png")
                     $results+=$result
                     Write-Output ("Run {0}: {1:N2} FPS; p95 {2:N2}ms; peak FX {3}; dropped {4}" -f $run,$result.fps,$result.p95Ms,$result.peakEffects,$result.effectsDropped)
                     break
@@ -36,5 +38,6 @@ for($run=1;$run -le $Runs;$run++) {
         if($results.Count -lt $run){throw 'Benchmark timed out'}
     }finally{if(!$process.HasExited){Stop-Process -Id $process.Id}}
 }
-$results | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $destination 'summary.json')
-Write-Output (Join-Path $destination 'summary.json')
+$summary=if($Label -eq 'run'){'summary.json'}else{"$Label-summary.json"}
+$results | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $destination $summary)
+Write-Output (Join-Path $destination $summary)

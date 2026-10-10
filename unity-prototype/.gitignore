@@ -18,3 +18,7 @@
 /Assets/Resources/simple-models.json.meta
 /Assets/Resources/replay-models.json*
 /Assets/Resources/replay-workload.json*
+/Assets/Editor/LocalReference/
+/Assets/Editor/LocalReference.meta
+/Assets/LocalReference/
+/Assets/LocalReference.meta

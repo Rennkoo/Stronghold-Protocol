@@ -45,6 +45,10 @@ Unity Hub 添加本目录，使用 Unity 6000.6.5f1。菜单 `Stronghold/Create 
 
 ## 后续验收
 
+特效优化保留了原槽位绘制顺序，并复用索引/UV/圆环参数。`PrototypeBuild.ValidateAndBuild` 会同时验证粒子槽位回收和网格有效前缀。`tools/measure-unity-stress.ps1` 支持 `-Executable` 指定旧构建、`-Label` 区分结果，便于交替对照；标签仅允许字母、数字和连字符。
+
+`tools/benchmark-unity-effects.ps1 -UnityEditor <Unity.exe路径>` 可从指定旧提交生成临时特效参考实现，对比固定输入下的 Editor CPU 耗时与末帧几何，完成后自动清理参考代码。此成绩不代表游戏 FPS。最近的四轮原生 A/B 测试未确认整体帧率提高；隔离 CPU 复测改善约 8%，原始记录见 [特效对照数据](../docs/performance/unity-effects-20261010.json)。
+
 1. 确认全部模型正确加载、画面正确、effectsDropped 为 0。
 2. 启动本地网页服务后执行 `node tools/verify-unity-stress.mjs`，逐条验证单位与事件；`STRESS_BASE_URL` 可配置服务地址，默认 localhost:3137。
 3. 同一设备、相同分辨率及画质，至少重复三次，比较平均 FPS 与 p95/p99，不将单次高 FPS 当成收益结论。

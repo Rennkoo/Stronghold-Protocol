@@ -6,16 +6,24 @@ using UnityEngine.Rendering;
 public sealed class StressEffects : MonoBehaviour {
     struct Particle {public int kind,glyph;public Vector3 from,to;public float age,life,size;public Color color;public string digits;}
     readonly Particle[] pool=new Particle[2048];
+    readonly ParticleSlots slots=new ParticleSlots(2048);
+    readonly Vector2[] ring=new Vector2[20];
+    readonly Vector2[] glyphUvs=new Vector2[48];
     readonly List<Vector3> vertices=new List<Vector3>(32768);
     readonly List<Vector2> uvs=new List<Vector2>(32768);
     readonly List<Color> colors=new List<Color>(32768);
     readonly List<int> triangles=new List<int>(49152);
-    Mesh mesh; Material material; Texture2D atlas; Camera camera; int cursor;
+    Mesh mesh; Material material; Texture2D atlas; Camera camera;
     Transform[] barUnits;int[] hp;StressUnit[] definitions;
     public int active,peak,dropped,emitted;
     public void SetBars(Transform[] units,int[] health,StressUnit[] info){barUnits=units;hp=health;definitions=info;}
     public void Initialize(Camera cam) {
         camera=cam;
+        for(int k=0;k<ring.Length;k++){float a=k*Mathf.PI*.1f;ring[k]=new Vector2(Mathf.Cos(a),Mathf.Sin(a));}
+        for(int g=0;g<12;g++){
+            float x0=(g<10?g*8:g==10?80:88)/128f,x1=(g<10?g*8+8:g==10?88:104)/128f;
+            glyphUvs[g*4]=new Vector2(x0,0);glyphUvs[g*4+1]=new Vector2(x1,0);glyphUvs[g*4+2]=new Vector2(x1,1);glyphUvs[g*4+3]=new Vector2(x0,1);
+        }
         atlas=new Texture2D(128,16,TextureFormat.RGBA32,false);atlas.filterMode=FilterMode.Point;
         var pixels=new Color[128*16];
         string[] digits={"11111100011000110001100011000111111","00100011000010000100001000010001110","11111000010000111111100001000011111","11111000010000101111000010000111111","10001100011000111111000010000100001","11111100001000011111000010000111111","11111100001000011111100011000111111","11111000010001000100010000100001000","11111100011000111111100011000111111","11111100011000111111000010000111111"};
@@ -31,8 +39,7 @@ public sealed class StressEffects : MonoBehaviour {
     }
     public void Emit(string kind,Vector3 from,Vector3 to,int value,string style,string type) {
         if(kind=="attack" && style=="none")return;
-        int slot=-1;
-        for(int n=0;n<pool.Length;n++){int i=(cursor+n)%pool.Length;if(pool[i].life<=0){slot=i;cursor=(i+1)%pool.Length;break;}}
+        int slot=slots.Acquire();
         if(slot<0){dropped++;return;}
         var p=new Particle {from=from,to=to,age=0,life=.7f,color=Color.white,size=.16f,glyph=11};
         if(kind=="damage"||kind=="heal"){p.kind=1;p.digits=value.ToString();p.from+=Vector3.up*.8f;p.color=kind=="heal"?new Color(.35f,1,.55f):type=="arts"?new Color(.5f,.75f,1):new Color(1,.85f,.4f);}
@@ -41,8 +48,11 @@ public sealed class StressEffects : MonoBehaviour {
         pool[slot]=p;emitted++;
     }
     void LateUpdate() {
+        AdvanceAndRender(Time.unscaledDeltaTime);
+    }
+    public void AdvanceAndRender(float deltaTime) {
         if(!mesh)return;
-        vertices.Clear();uvs.Clear();colors.Clear();triangles.Clear();active=0;
+        vertices.Clear();uvs.Clear();colors.Clear();active=0;
         Vector3 right=camera.transform.right,up=camera.transform.up;
         if(barUnits!=null)for(int i=0;i<barUnits.Length;i++) {
             if(!barUnits[i].gameObject.activeInHierarchy || hp[i]<=0)continue;
@@ -51,25 +61,28 @@ public sealed class StressEffects : MonoBehaviour {
             float health=Mathf.Clamp01((float)hp[i]/definitions[i].maxHp);
             Quad(pos-right*(1-health)*.27f,right*(.27f*health),up*.016f,10,definitions[i].enemy?new Color(1,.3f,.25f):new Color(.25f,.9f,.5f));
         }
-        for(int i=0;i<pool.Length;i++){
-            var p=pool[i];if(p.life<=0)continue;p.age+=Time.unscaledDeltaTime;
-            if(p.age>=p.life){p.life=0;pool[i]=p;continue;}pool[i]=p;active++;
+        for(int i=slots.Head;i>=0;){
+            int following=slots.Next(i);
+            var p=pool[i];p.age+=deltaTime;
+            if(p.age>=p.life){p.life=0;pool[i]=p;slots.Release(i);i=following;continue;}pool[i]=p;active++;
             float t=p.age/p.life;Color c=p.color;c.a=1-t;
             if(p.kind==1){var pos=p.from+up*t*.6f;for(int k=0;k<p.digits.Length;k++)Quad(pos+right*(k-p.digits.Length*.5f)*.12f,right*.06f,up*.15f,p.digits[k]-'0',c);}
-            else if(p.kind==2){float radius=.2f+t*.7f;for(int k=0;k<20;k++){float a=k*Mathf.PI*.1f;Quad(p.from+right*Mathf.Cos(a)*radius+up*Mathf.Sin(a)*radius,right*.025f,up*.025f,10,c);}}
+            else if(p.kind==2){float radius=.2f+t*.7f;for(int k=0;k<20;k++)Quad(p.from+right*ring[k].x*radius+up*ring[k].y*radius,right*.025f,up*.025f,10,c);}
             else if(p.kind==3){var delta=p.to-p.from;for(int k=0;k<12;k++)Quad(p.from+delta*(k/11f),right*.04f,up*.04f,11,c);}
             else {var pos=Vector3.Lerp(p.from,p.to,t)+Vector3.up*(p.life>.4f?Mathf.Sin(t*Mathf.PI)*.7f:0);Quad(pos,right*p.size,up*p.size,11,c);}
+            i=following;
         }
         peak=Mathf.Max(peak,active);
         // SetTriangles normally recalculates bounds; avoid doing the same vertex scan twice.
-        mesh.Clear();mesh.SetVertices(vertices);mesh.SetUVs(0,uvs);mesh.SetColors(colors);mesh.SetTriangles(triangles,0,false);mesh.RecalculateBounds();
+        int indexCount=vertices.Count/4*6;
+        while(triangles.Count<indexCount){int b=triangles.Count/6*4;triangles.Add(b);triangles.Add(b+1);triangles.Add(b+2);triangles.Add(b);triangles.Add(b+2);triangles.Add(b+3);}
+        mesh.Clear();mesh.SetVertices(vertices);mesh.SetUVs(0,uvs);mesh.SetColors(colors);mesh.SetTriangles(triangles,0,indexCount,0,false);mesh.RecalculateBounds();
     }
     void Quad(Vector3 center,Vector3 right,Vector3 up,int glyph,Color color){
-        int b=vertices.Count;vertices.Add(center-right-up);vertices.Add(center+right-up);vertices.Add(center+right+up);vertices.Add(center-right+up);
-        float x0=(glyph<10?glyph*8:glyph==10?80:88)/128f,x1=(glyph<10?glyph*8+8:glyph==10?88:104)/128f;
-        uvs.Add(new Vector2(x0,0));uvs.Add(new Vector2(x1,0));uvs.Add(new Vector2(x1,1));uvs.Add(new Vector2(x0,1));
+        vertices.Add(center-right-up);vertices.Add(center+right-up);vertices.Add(center+right+up);vertices.Add(center-right+up);
+        int offset=glyph*4;
+        uvs.Add(glyphUvs[offset]);uvs.Add(glyphUvs[offset+1]);uvs.Add(glyphUvs[offset+2]);uvs.Add(glyphUvs[offset+3]);
         for(int k=0;k<4;k++)colors.Add(color);
-        triangles.Add(b);triangles.Add(b+1);triangles.Add(b+2);triangles.Add(b);triangles.Add(b+2);triangles.Add(b+3);
     }
     void OnDestroy(){if(mesh)Destroy(mesh);if(material)Destroy(material);if(atlas)Destroy(atlas);}
 }
