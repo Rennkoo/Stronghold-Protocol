@@ -1,0 +1,12 @@
+/Library/
+/Temp/
+/Logs/
+/obj/
+/Builds/
+/UserSettings/
+/Assets/Spine/
+/Assets/Spine.meta
+/Assets/Resources/Models/
+/Assets/Resources/Models.meta
+/Assets/Resources/models.json
+/Assets/Resources/models.json.meta
