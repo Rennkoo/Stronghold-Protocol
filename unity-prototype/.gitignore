@@ -16,3 +16,5 @@
 /Assets/Resources/stress.json.meta
 /Assets/Resources/simple-models.json
 /Assets/Resources/simple-models.json.meta
+/Assets/Resources/replay-models.json*
+/Assets/Resources/replay-workload.json*

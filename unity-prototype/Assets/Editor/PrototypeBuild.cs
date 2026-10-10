@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEditor.Build.Reporting;
 
 public static class PrototypeBuild {
+    public static void ValidateAndBuild() {AnimationValidation.Run();BuildWindows();}
     [MenuItem("Stronghold/Create benchmark scene")]
     public static void CreateScene() {
         var shader = Shader.Find("Spine/Skeleton");

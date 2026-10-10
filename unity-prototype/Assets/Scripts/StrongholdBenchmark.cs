@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using Spine.Unity;
 
-[Serializable] public class BenchmarkModel { public string id, path, idle, move, attack, skill; public bool pma; }
+[Serializable] public class BenchmarkModel { public string id, path, idle, move, attack, skill,die,deploy; public bool pma; }
 [Serializable] public class BenchmarkModels { public BenchmarkModel[] models; }
+[Serializable] public class ReplayCount {public string kind;public int count;}
+[Serializable] public class ReplayResult {public int snapshots,units,models,failures;public ReplayCount[] events;public ReplayState[] states;public float[] positions;public int[] hp,visibleIds;}
 [Serializable] public class BenchmarkResult {
     public string unity, device, gpu, utc, scene = "120 skeletons; synthetic board; no combat simulation";
     public int units, uniqueModels, width, height, samples;
@@ -23,12 +25,15 @@ public class StrongholdBenchmark : MonoBehaviour {
     int sampleCount=3600;
     Camera renderCamera;
     StressWorkload workload;
+    TerrainHeightMap terrainHeights;
     BenchmarkModel[] entries;
     StressEffects effects;
     int tick,boardTriangles,focusedSamples;
     float tickAccumulator,simulationTime;
     UnitAnimationDriver[] animationDrivers;
     MeshRenderer[] actorRenderers;
+    ReplayPlayback replay;
+    bool replayCaptured,replaySaved;
     int[] hp;
     string status = "Warming up (30 seconds)", output;
     public int unitCount = 120;
@@ -46,10 +51,13 @@ public class StrongholdBenchmark : MonoBehaviour {
         camera.transform.position = new Vector3(9.5f, 3.1f, -20);
         camera.backgroundColor = new Color(.055f,.065f,.085f);
         camera.clearFlags = CameraClearFlags.SolidColor;
-        var stress = Array.IndexOf(args,"-simple")>=0 ? null : Resources.Load<TextAsset>("stress");
+        bool replayMode=Array.IndexOf(args,"-replay")>=0;
+        var stress = Array.IndexOf(args,"-simple")>=0 ? null : Resources.Load<TextAsset>(replayMode?"replay-workload":"stress");
+        if(replayMode && !stress)throw new Exception("Run export-unity-stress.mjs --replay first");
         if(stress) workload = JsonUtility.FromJson<StressWorkload>(stress.text);
+        if(workload!=null)terrainHeights=new TerrainHeightMap(workload.terrain);
         if(workload != null) CreateStressBoard(camera); else CreateBoard();
-        var manifest = Resources.Load<TextAsset>(workload != null ? "models" : "simple-models") ?? Resources.Load<TextAsset>("models");
+        var manifest = Resources.Load<TextAsset>(replayMode?"replay-models":workload != null ? "models" : "simple-models") ?? Resources.Load<TextAsset>("models");
         if (!manifest) throw new Exception("Missing model manifest: run prepare-unity.mjs");
         entries = JsonUtility.FromJson<BenchmarkModels>(manifest.text).models;
         if (entries == null || entries.Length == 0) throw new Exception("No real skeleton assets available");
@@ -103,16 +111,18 @@ public class StrongholdBenchmark : MonoBehaviour {
             effects.Initialize(camera);
             var transforms=new Transform[actors.Count];for(int i=0;i<actors.Count;i++)transforms[i]=actors[i].transform;
             effects.SetBars(transforms,hp,workload.units);
+            if(replayMode){
+                replay=new ReplayPlayback(workload,actors.ToArray(),animationDrivers,actorRenderers,entries,hp,effects,terrainHeights);
+                status="Recorded battle playback (2x)";
+            }
         }
         initialized=true;
     }
     Vector3 UnitPosition(StressUnit unit,float time) {
         float x=unit.x,y=unit.y;
-        if(unit.enemy) {x=1+((unit.x-time*.35f+40)%19);y+=Mathf.Sin(time+unit.id)*.25f;}
+        if(unit.enemy && workload.replayFrames==null) {x=1+((unit.x-time*.35f+40)%19);y+=Mathf.Sin(time+unit.id)*.25f;}
         x=Mathf.Round(x*100)/100;y=Mathf.Round(y*100)/100;
-        float height=0;
-        int row=Mathf.RoundToInt(y),col=Mathf.RoundToInt(x);
-        foreach(var tile in workload.terrain) if(tile.x==col && tile.y==row) {height=tile.z;break;}
+        float height=terrainHeights.Get(x,y);
         return StressWorkload.World(x,y,height+.025f);
     }
     void CreateStressBoard(Camera camera) {
@@ -183,6 +193,24 @@ public class StrongholdBenchmark : MonoBehaviour {
     void Update() {
         if(!initialized)return;
         float dt=Time.unscaledDeltaTime; elapsed+=dt; attackClock+=dt;
+        if(replay!=null){
+            replay.Update(dt);status=replay.Status;
+            if(!replayCaptured && replay.GameTime>=25){replayCaptured=true;Capture(Path.Combine(Application.persistentDataPath,"replay-mid.png"));}
+            if(replay.Finished && !replaySaved){
+                replaySaved=true;
+                var counts=new List<ReplayCount>();foreach(var pair in replay.Counts)counts.Add(new ReplayCount{kind=pair.Key,count=pair.Value});
+                var positions=new float[actors.Count*3];var visible=new List<int>();
+                for(int i=0;i<actors.Count;i++){
+                    var p=actors[i].transform.position;positions[i*3]=p.x;positions[i*3+1]=p.y;positions[i*3+2]=p.z;
+                    if(actors[i].gameObject.activeSelf)visible.Add(workload.units[i].id);
+                }
+                var result=new ReplayResult{snapshots=workload.replayFrames.Length,units=actors.Count,models=modelCount,failures=failed,events=counts.ToArray(),states=replay.FinalStates,positions=positions,hp=hp,visibleIds=visible.ToArray()};
+                output=Path.Combine(Application.persistentDataPath,"replay-result.json");
+                File.WriteAllText(output,JsonUtility.ToJson(result,true));Capture(Path.Combine(Application.persistentDataPath,"replay-final.png"));
+                Debug.Log("REPLAY RESULT: "+output);
+            }
+            return;
+        }
         if(workload != null) StepStress(dt);
         else if(attackClock>=2) {
             attackClock=0;
@@ -216,7 +244,10 @@ public class StrongholdBenchmark : MonoBehaviour {
         File.WriteAllText(output,JsonUtility.ToJson(result,true));
         status=string.Format("Complete: {0:F1} FPS; p95 {1:F2} ms",result.fps,result.p95Ms);
         Debug.Log(status+" Result: "+output);
-        // Visual verification happens after measurement, so readback does not contaminate frame samples.
+        Capture(Path.ChangeExtension(output,".png"));
+    }
+    void Capture(string path) {
+        // Readback occurs after measurement, or outside benchmark mode during replay.
         var target = new RenderTexture(Screen.width, Screen.height, 24);
         var previous = RenderTexture.active;
         renderCamera.targetTexture = target;
@@ -225,7 +256,7 @@ public class StrongholdBenchmark : MonoBehaviour {
         var capture = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
         capture.ReadPixels(new Rect(0,0,Screen.width,Screen.height),0,0);
         capture.Apply();
-        File.WriteAllBytes(Path.ChangeExtension(output,".png"),capture.EncodeToPNG());
+        File.WriteAllBytes(path,capture.EncodeToPNG());
         renderCamera.targetTexture = null;
         RenderTexture.active = previous;
         Destroy(capture); target.Release(); Destroy(target);

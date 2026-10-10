@@ -1,0 +1,21 @@
+{
+  "unity": "6000.6.5f1",
+  "device": "13th Gen Intel(R) Core(TM) i7-13650HX",
+  "gpu": "NVIDIA GeForce RTX 4050 Laptop GPU",
+  "utc": "2026-10-10T08:41:13.4517514Z",
+  "scene": "Web stress units/events + exported board geometry/atlases; simplified Unity FX/materials; no combat simulation",
+  "units": 120,
+  "uniqueModels": 59,
+  "width": 1920,
+  "height": 1080,
+  "samples": 3600,
+  "fps": 77.11511960716746,
+  "p50Ms": 12.231406211853027,
+  "p95Ms": 18.290300369262695,
+  "p99Ms": 24.52259635925293,
+  "effectsEmitted": 45924,
+  "effectsDropped": 0,
+  "peakEffects": 330,
+  "boardTriangles": 2292,
+  "focusedSamples": 3600
+}

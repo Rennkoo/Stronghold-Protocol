@@ -31,6 +31,18 @@ Unity Hub 添加本目录，使用 Unity 6000.6.5f1。菜单 `Stronghold/Create 
 
 产物 `Builds/Windows/StrongholdBenchmark.exe`。结果和测试后导出的画面写入 `%USERPROFILE%\AppData\LocalLow\Rennkoo\Stronghold Rendering Prototype`。JSON 包含 focusedSamples：后台成绩不代表可见窗口的呈现流畅度。构建默认不锁帧、不启用 VSync，以便观察吞吐能力；实际显示流畅度需另测启用 VSync 的版本。
 
+## 真实录像回放
+
+执行 `node tools/export-unity-stress.mjs --replay`，生成独立的录像模型清单和普通作战棋盘。随后重新构建 Windows 程序，加 `-replay` 启动（默认仍为压力测试）。录像为仓库已有的 `public/dev/recordings/normal-m01.json`，55 秒游戏时间以 2 倍速播放一次，结束后停在最后状态。
+
+支持按快照控制单位显示/退场、位置插值、血量、移动/待机及冻结；攻击、部署、技能开始和死亡事件驱动动画，并显示简化弹体和数字。所有单位预先加载，尚未实现运行时模型下载或多人网络；录像回放不运行战斗逻辑。技力和完整状态位保留在数据中，尚未显示技力条/状态图标；status/fx 事件目前仅计数，技能结束及 begin/loop/end 动画角色仍需补齐。
+
+`node tools/verify-unity-replay.mjs` 逐条比较导出快照、事件关键字段及模型映射；`tools/measure-unity-replay.ps1` 启动原生程序播放整场并验证事件数量、最终可见单位、实际血量和位置。中场/最终截图及结果在 `.cache/unity-replay`。运行脚本会结束其启动的测试进程。
+
+`PrototypeBuild.ValidateAndBuild` 可作为批处理入口，先执行真实 Spine 模型的动画验证，再构建 Windows。
+
+2026-10-10 地形索引和特效包围盒优化后，120 单位、1920×1080、前台、30 秒预热 + 3600 帧平均 77.12 FPS，p95 18.29 ms，特效丢弃 0。这与前面的后台测试条件不同；部分帧仍超过 16.67 ms，尚未达到稳定 60 FPS。记录见 [前台压力数据](../docs/performance/unity-grid-stress-long-20261010.json)。
+
 ## 后续验收
 
 1. 确认全部模型正确加载、画面正确、effectsDropped 为 0。

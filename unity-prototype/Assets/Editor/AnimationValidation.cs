@@ -4,6 +4,13 @@ using Spine.Unity;
 
 public static class AnimationValidation {
     public static void Run() {
+        foreach(var name in new[]{"stress","replay-workload"}){
+            var text=Resources.Load<TextAsset>(name);if(!text)continue;
+            var workload=JsonUtility.FromJson<StressWorkload>(text.text);
+            var terrain=new TerrainHeightMap(workload.terrain);
+            foreach(var tile in workload.terrain)Require(terrain.Get(tile.x,tile.y)==tile.z,"Terrain lookup preserves tile height");
+            Require(terrain.Get(-10000,-10000)==0,"Missing terrain has zero height");
+        }
         var models=JsonUtility.FromJson<BenchmarkModels>(Resources.Load<TextAsset>("models").text).models;
         foreach(var model in models) {
             if(string.IsNullOrEmpty(model.skill) || model.skill==model.idle || model.skill==model.attack) continue;
@@ -25,6 +32,11 @@ public static class AnimationValidation {
                 actor.AnimationState.Apply(actor.Skeleton);
                 Require(actor.AnimationState.GetCurrent(0).Animation.Name==model.idle,"Recovery uses animation clock");
                 Require(driver.Attack(),"Attack allowed after skill completion");
+                actor.AnimationState.Update(actor.AnimationState.GetCurrent(0).Animation.Duration+.05f);
+                actor.AnimationState.Apply(actor.Skeleton);
+                actor.AnimationState.Update(.05f);
+                actor.AnimationState.Apply(actor.Skeleton);
+                Require(driver.Attack(),"Recycled track entries cannot keep a stale skill lock");
                 driver.Die("__missing_death_clip__");
                 Require(!driver.Attack() && !driver.Skill() && actor.timeScale==0,"Dead units cannot restart attacks");
                 Debug.Log("ANIMATION VALIDATION PASSED: "+model.id);

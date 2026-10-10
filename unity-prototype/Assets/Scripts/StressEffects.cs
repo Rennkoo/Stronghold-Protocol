@@ -45,6 +45,7 @@ public sealed class StressEffects : MonoBehaviour {
         vertices.Clear();uvs.Clear();colors.Clear();triangles.Clear();active=0;
         Vector3 right=camera.transform.right,up=camera.transform.up;
         if(barUnits!=null)for(int i=0;i<barUnits.Length;i++) {
+            if(!barUnits[i].gameObject.activeInHierarchy || hp[i]<=0)continue;
             var pos=barUnits[i].position+Vector3.up*1.2f;
             Quad(pos,right*.28f,up*.022f,10,new Color(.05f,.05f,.05f,.85f));
             float health=Mathf.Clamp01((float)hp[i]/definitions[i].maxHp);
@@ -60,7 +61,8 @@ public sealed class StressEffects : MonoBehaviour {
             else {var pos=Vector3.Lerp(p.from,p.to,t)+Vector3.up*(p.life>.4f?Mathf.Sin(t*Mathf.PI)*.7f:0);Quad(pos,right*p.size,up*p.size,11,c);}
         }
         peak=Mathf.Max(peak,active);
-        mesh.Clear();mesh.SetVertices(vertices);mesh.SetUVs(0,uvs);mesh.SetColors(colors);mesh.SetTriangles(triangles,0);mesh.RecalculateBounds();
+        // SetTriangles normally recalculates bounds; avoid doing the same vertex scan twice.
+        mesh.Clear();mesh.SetVertices(vertices);mesh.SetUVs(0,uvs);mesh.SetColors(colors);mesh.SetTriangles(triangles,0,false);mesh.RecalculateBounds();
     }
     void Quad(Vector3 center,Vector3 right,Vector3 up,int glyph,Color color){
         int b=vertices.Count;vertices.Add(center-right-up);vertices.Add(center+right-up);vertices.Add(center+right+up);vertices.Add(center-right+up);
