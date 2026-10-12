@@ -26,6 +26,7 @@ public static class PrototypeBuild {
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Benchmark.unity");
         EditorBuildSettings.scenes = new[] {new EditorBuildSettingsScene("Assets/Scenes/Benchmark.unity", true)};
         PlayerSettings.companyName = "Rennkoo";
+        PlayerSettings.insecureHttpOption=InsecureHttpOption.AlwaysAllowed;
         PlayerSettings.productName = "Stronghold Rendering Prototype";
         PlayerSettings.defaultScreenWidth = 1920;
         PlayerSettings.defaultScreenHeight = 1080;

@@ -45,6 +45,16 @@ Unity Hub 添加本目录，使用 Unity 6000.6.5f1。菜单 `Stronghold/Create 
 
 ## 后续验收
 
+## 本地实际试玩
+
+双击仓库根目录 `play-unity.cmd`，或执行 `tools/play-unity.ps1`。需要已安装 Node.js、仓库依赖和最新 Windows 构建；脚本启动仅监听 127.0.0.1:3141 的实时模拟桥，Unity 关闭后自动停止桥服务。程序参数为 `-play`，默认压力测试及 `-replay` 仍保留。
+
+七名干员准备阶段可重新布阵：左侧选择干员，点击棋盘更新站位，点击 Start battle 开始。服务器检查地块职业限制及占位。战斗按钮 Pause/Resume、Activate selected skill、New battle 分别暂停/继续、释放当前干员的可用手动技能、返回布阵。自动/被动技能继续沿用原行为；手动技能策略在本地试玩设为 NEVER，由按钮调用模拟器 activate，仍消耗技力。
+
+使用原 Node Battle 和普通地图第 5 轮波次实时计算，不读取录像帧。素材名单及棋盘目前复用录像导出的资源清单：七名固定干员、32 个敌人；未支持商店、装备、跨轮经济、多人大厅、联机账号或任意角色，界面暂为英文。模型预加载，实时单位根据素材映射复用已有实例。通信为本机 HTTP 拉取 0.1 游戏秒快照，画面位置尚未加入联网插值，不是最终联机架构。
+
+`node tools/test-unity-play.mjs` 验证真实敌人生成、非法布阵、技能释放和新战斗；原生 `-play -play-smoke` 用默认布阵自动开始，用于整场连通性验收，不作为用户默认入口。
+
 伤害/治疗数字在事件产生时编码为紧凑字形序列，避免每个事件的 ToString 字符串分配；每帧直接读取字形，保留原布局。零值、十进制边界和 int 极值由 EffectsValidation 覆盖。Editor 隔离 CPU 对照有明显波动，不能用该局部成绩推断完整游戏稳定达到 60 FPS。
 
 特效优化保留了原槽位绘制顺序，并复用索引/UV/圆环参数。`PrototypeBuild.ValidateAndBuild` 会同时验证粒子槽位回收和网格有效前缀。`tools/measure-unity-stress.ps1` 支持 `-Executable` 指定旧构建、`-Label` 区分结果，便于交替对照；标签仅允许字母、数字和连字符。

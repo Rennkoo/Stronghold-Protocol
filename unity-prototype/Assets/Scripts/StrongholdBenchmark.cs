@@ -34,6 +34,7 @@ public class StrongholdBenchmark : MonoBehaviour {
     MeshRenderer[] actorRenderers;
     ReplayPlayback replay;
     bool replayCaptured,replaySaved;
+    bool liveMode;
     int[] hp;
     string status = "Warming up (30 seconds)", output;
     public int unitCount = 120;
@@ -51,7 +52,8 @@ public class StrongholdBenchmark : MonoBehaviour {
         camera.transform.position = new Vector3(9.5f, 3.1f, -20);
         camera.backgroundColor = new Color(.055f,.065f,.085f);
         camera.clearFlags = CameraClearFlags.SolidColor;
-        bool replayMode=Array.IndexOf(args,"-replay")>=0;
+        liveMode=Array.IndexOf(args,"-play")>=0;
+        bool replayMode=liveMode || Array.IndexOf(args,"-replay")>=0;
         var stress = Array.IndexOf(args,"-simple")>=0 ? null : Resources.Load<TextAsset>(replayMode?"replay-workload":"stress");
         if(replayMode && !stress)throw new Exception("Run export-unity-stress.mjs --replay first");
         if(stress) workload = JsonUtility.FromJson<StressWorkload>(stress.text);
@@ -111,7 +113,10 @@ public class StrongholdBenchmark : MonoBehaviour {
             effects.Initialize(camera);
             var transforms=new Transform[actors.Count];for(int i=0;i<actors.Count;i++)transforms[i]=actors[i].transform;
             effects.SetBars(transforms,hp,workload.units);
-            if(replayMode){
+            if(liveMode){
+                var control=gameObject.AddComponent<LiveBattleControl>();
+                control.Initialize(workload,actors.ToArray(),entries,hp,effects,terrainHeights,camera);
+            }else if(replayMode){
                 replay=new ReplayPlayback(workload,actors.ToArray(),animationDrivers,actorRenderers,entries,hp,effects,terrainHeights);
                 status="Recorded battle playback (2x)";
             }
@@ -192,6 +197,7 @@ public class StrongholdBenchmark : MonoBehaviour {
     }
     void Update() {
         if(!initialized)return;
+        if(liveMode)return;
         float dt=Time.unscaledDeltaTime; elapsed+=dt; attackClock+=dt;
         if(replay!=null){
             replay.Update(dt);status=replay.Status;
@@ -246,7 +252,7 @@ public class StrongholdBenchmark : MonoBehaviour {
         Debug.Log(status+" Result: "+output);
         Capture(Path.ChangeExtension(output,".png"));
     }
-    void Capture(string path) {
+    public void Capture(string path) {
         // Readback occurs after measurement, or outside benchmark mode during replay.
         var target = new RenderTexture(Screen.width, Screen.height, 24);
         var previous = RenderTexture.active;
@@ -263,6 +269,7 @@ public class StrongholdBenchmark : MonoBehaviour {
     }
     float Percentile(double q) {return frames[Math.Min(frames.Count-1,(int)Math.Ceiling(frames.Count*q)-1)];}
     void OnGUI() {
+        if(liveMode)return;
         GUI.Box(new Rect(12,12,680,95),"Unity rendering prototype (not the full game)");
         GUI.Label(new Rect(25,38,650,25),"Units: "+actors.Count+"; models: "+modelCount+"; failures: "+failed+" | "+status);
         GUI.Label(new Rect(25,65,650,30),output ?? (workload != null ? "Web stress: 178 tiles + projectiles + damage/heal numbers; pooled FX" : "30s warmup + 3600 frames. Compare Windows build, not Editor FPS."));
