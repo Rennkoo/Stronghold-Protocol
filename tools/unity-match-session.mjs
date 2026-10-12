@@ -31,14 +31,20 @@ export class UnityMatchSession {
     const ps=this.match.players.get('unity');
     const messages=this.messages.splice(0);
     const pub=this.match.publicView(),priv=ps.privateView();
-    const named=p=>p?{...p,name:(p.kind==='item'?this.match.gd.item(p.id):p.kind==='token'?this.match.gd.token(p.id):this.match.gd.chess(p.id))?.name||p.id}:null;
+    const named=p=>{
+      if(!p)return null;
+      const rec=p.kind==='item'?this.match.gd.item(p.id):p.kind==='token'?this.match.gd.token(p.id):this.match.gd.chess(p.id);
+      return {...p,name:rec?.name||p.id,itemType:rec?.itemType||'',desc:rec?.desc||'',
+        items:(p.items||[]).map(it=>named({...it,kind:'item'}))};
+    };
     const ui={phase:pub.phase,round:pub.round,stageId:pub.stageId,lp:priv.lp,funds:priv.funds,
       deployCount:priv.deployCount,deployCap:priv.deployCap,canReady:priv.canReady,ready:priv.ready,
-      shop:{...priv.shop,slots:priv.shop.slots.map((p,slot)=>p?{...named(p),slot}:null)},
+      shop:{...priv.shop,slots:priv.shop.slots.map((p,slot)=>p?{...named(p),slot}:null),
+        rewardOffer:priv.shop.rewardOffer?{...priv.shop.rewardOffer,slots:priv.shop.rewardOffer.slots.map(named)}:null},
       hand:priv.hand.map((p,idx)=>p?{...named(p),idx}:null),temp:priv.temp.map(named),board:priv.board.map(named),
       tiles:[...ps.deployMap()].map(([key,kind])=>{const [row,col]=key.split(',').map(Number);return {row,col,kind};}),
       bands:this.match.gd.bandIds().map(id=>({id,name:this.match.gd.band(id).name,desc:this.match.gd.band(id).desc})),
-      cards:pub.sp?.cards||[],effects:priv.effects,bonds:priv.bonds,
+      cards:pub.sp?.cards||[],effects:priv.effects,bonds:priv.bonds.map(b=>({...b,name:this.match.gd.bond(b.bondId)?.name||b.bondId})),
       ended:this.match.ended,paused:pub.paused};
     return {reply,public:this.match.publicView(),private:ps.privateView(),messages,
       ui,
