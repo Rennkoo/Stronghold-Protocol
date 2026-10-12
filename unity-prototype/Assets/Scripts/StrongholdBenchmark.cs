@@ -41,6 +41,7 @@ public class StrongholdBenchmark : MonoBehaviour {
 
     void Start() {
         var args=Environment.GetCommandLineArgs();
+        if(Array.IndexOf(args,"-match")>=0){gameObject.AddComponent<MatchPreparationControl>();enabled=false;return;}
         int sampleArg=Array.IndexOf(args,"-benchmark-samples");
         if(sampleArg>=0 && sampleArg+1<args.Length && int.TryParse(args[sampleArg+1],out int requested))sampleCount=Mathf.Clamp(requested,600,3600);
         QualitySettings.vSyncCount = 0;

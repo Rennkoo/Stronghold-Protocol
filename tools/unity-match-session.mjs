@@ -1,0 +1,49 @@
+// Unity adapter: keep economy, drafts, placement and round transitions in the original engine.
+import {Match} from '../server/match/Match.js';
+import {VirtualScheduler} from '../server/match/scheduler.js';
+import {getData} from '../server/data.js';
+import {validateC2S} from '../shared/protocol.js';
+const log={info(){},warn(){},debug(){},error(){}};
+export class UnityMatchSession {
+  constructor({seed=20261012}={}){
+    this.messages=[];
+    this.scheduler=new VirtualScheduler({instantCombat:false});
+    const emit=msg=>{this.messages.push(msg);return true;};
+    this.match=new Match({roomCode:'UNITY',mode:'solo',difficulty:'NORMAL',seed,
+      seats:[{seat:0,playerId:'unity',name:'指挥官',isBot:false,connected:true}],
+      data:getData({log}),log,scheduler:this.scheduler,clientCombat:false,
+      send:(_,msg)=>emit(msg),broadcast:emit,onEnd:summary=>{this.summary=summary;}});
+    this.match.start();
+  }
+  command(input){
+    let reply={ok:true};
+    if(input.action==='intent'){
+      const error=validateC2S(input.intent);
+      if(error||!input.intent.t.startsWith('g.'))reply={error:error||'Only game intents supported'};
+      else reply=this.match.handle('unity',input.intent);
+    }else if(input.action==='step')this.scheduler.advance(100);
+    else if(input.action!=='state')reply={error:'Unknown match action'};
+    // Zero-time callbacks resolve confirmed drafts; state reads do not advance the game clock.
+    if(input.action==='intent')this.scheduler.advance(0);
+    return this.view(reply);
+  }
+  view(reply={ok:true}){
+    const ps=this.match.players.get('unity');
+    const messages=this.messages.splice(0);
+    const pub=this.match.publicView(),priv=ps.privateView();
+    const named=p=>p?{...p,name:(p.kind==='item'?this.match.gd.item(p.id):p.kind==='token'?this.match.gd.token(p.id):this.match.gd.chess(p.id))?.name||p.id}:null;
+    const ui={phase:pub.phase,round:pub.round,stageId:pub.stageId,lp:priv.lp,funds:priv.funds,
+      deployCount:priv.deployCount,deployCap:priv.deployCap,canReady:priv.canReady,ready:priv.ready,
+      shop:{...priv.shop,slots:priv.shop.slots.map((p,slot)=>p?{...named(p),slot}:null)},
+      hand:priv.hand.map((p,idx)=>p?{...named(p),idx}:null),temp:priv.temp.map(named),board:priv.board.map(named),
+      tiles:[...ps.deployMap()].map(([key,kind])=>{const [row,col]=key.split(',').map(Number);return {row,col,kind};}),
+      bands:this.match.gd.bandIds().map(id=>({id,name:this.match.gd.band(id).name,desc:this.match.gd.band(id).desc})),
+      cards:pub.sp?.cards||[],effects:priv.effects,bonds:priv.bonds,
+      ended:this.match.ended,paused:pub.paused};
+    return {reply,public:this.match.publicView(),private:ps.privateView(),messages,
+      ui,
+      bands:this.match.gd.bandIds().map(id=>({id,...this.match.gd.band(id)})),
+      errors:this.match.errorCount,ended:this.match.ended,summary:this.summary||null};
+  }
+  dispose(){this.match.dispose();this.scheduler.dispose();}
+}

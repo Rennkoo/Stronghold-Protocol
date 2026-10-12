@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {Battle} from '../server/sim/Battle.js';
 import {getDefaultSource,spawnsFromTemplate} from '../server/sim/simdata.js';
 import {getData} from '../server/data.js';
+import {UnityMatchSession} from './unity-match-session.mjs';
 const quiet={warn(){},error(){},info(){},debug(){}};
 const ds=getDefaultSource(),data=getData({log:quiet});
 const recording=JSON.parse(readFileSync(new URL('../public/dev/recordings/normal-m01.json',import.meta.url)));
@@ -54,12 +55,18 @@ export class PlaySession {
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
   const session=new PlaySession();
+  let matchSession=null;
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Content-Type','application/json');
-    if(req.method!=='POST'||req.url!=='/command'){res.writeHead(404);res.end('{}');return;}
+    if(req.method!=='POST'||!['/command','/match'].includes(req.url)){res.writeHead(404);res.end('{}');return;}
     try{let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Request too large');}
-      res.end(JSON.stringify(session.command(JSON.parse(body))));
+      const input=JSON.parse(body);
+      if(req.url==='/match'){
+        if(input.action==='new'){matchSession?.dispose();matchSession=new UnityMatchSession();res.end(JSON.stringify(matchSession.view()));}
+        else {matchSession??=new UnityMatchSession();res.end(JSON.stringify(matchSession.command(input)));}
+      }else res.end(JSON.stringify(session.command(input)));
     }catch(error){res.writeHead(400);res.end(JSON.stringify({error:error.message}));}
   });
-  server.listen(3141,'127.0.0.1',()=>console.log('Unity live battle bridge: http://127.0.0.1:3141'));
+  const port=process.argv.includes('--match')?3142:3141;
+  server.listen(port,'127.0.0.1',()=>console.log(`Unity live battle bridge: http://127.0.0.1:${port}`));
 }
