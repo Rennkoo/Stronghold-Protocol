@@ -37,7 +37,7 @@ export class UnityMatchSession {
       const b=field.battle,snap=b.snapshot(),meta=b.fieldMeta();
       const stage=this.match.gd.raw.stages[meta.stageId||pub.stageId];
       combat={key:`${pub.round}:${field.fieldId}:${pub.phase}`,gt:snap.t,killed:snap.killed,total:snap.total,finished:b.finished,
-        infos:meta.units.map(u=>({id:u.id,name:u.name||u.defId||String(u.id),assetId:u.spine,enemy:u.kind==='enemy',x:u.x,y:u.y,facing:u.facing,maxHp:u.maxHp})),
+        infos:meta.units.map(u=>({id:u.id,name:u.name||u.defId||String(u.id),assetId:u.spine,skillIndex:u.skillIndex||1,enemy:u.kind==='enemy',x:u.x,y:u.y,facing:u.facing,maxHp:u.maxHp})),
         states:snap.units.map(u=>({id:u[0],x:u[1],y:u[2],hp:u[3],maxHp:u[4],sp:u[5],spMax:u[6],flags:u[7],anim:u[8]})),
         events:messages.filter(m=>m.t==='b.ev'&&m.fieldId===field.fieldId).flatMap(m=>m.ev).map(e=>({kind:e[0],a:e[0]==='spawn'?e[1].id:typeof e[1]==='number'?e[1]:0,b:e[0]==='atk'?e[2]:0,value:['dmg','heal','skill'].includes(e[0])?e[2]:0})),
         tiles:(stage?.rows||[]).flatMap((line,row)=>Array.from(line,(glyph,col)=>({row,col,kind:stage.tiles[glyph]?.tileKey||glyph})))};

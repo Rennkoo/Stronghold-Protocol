@@ -28,7 +28,7 @@ public sealed class MatchPreparationControl:MonoBehaviour {
         combatSmoke=Array.IndexOf(Environment.GetCommandLineArgs(),"-match-combat-smoke")>=0;
         if(combatSmoke&&!combatSmokeDone){
             if(!combatSmokeStarted){combatSmokeStarted=true;Intent("\"t\":\"g.autoplay\",\"on\":true");return;}
-            if(state.combat!=null&&state.combat.gt>5&&battleView.VisibleCount>0&&!combatSmokeSeen){combatSmokeSeen=true;battleView.SaveCapture(System.IO.Path.Combine(Application.persistentDataPath,"match-combat.png"));Debug.Log("UNITY MATCH COMBAT VISIBLE: units="+battleView.VisibleCount);}
+            if(state.combat!=null&&state.combat.gt>5&&battleView.VisibleCount>0&&!combatSmokeSeen){combatSmokeSeen=true;battleView.SaveCapture(System.IO.Path.Combine(Application.persistentDataPath,"match-combat.png"));Debug.Log("UNITY MATCH COMBAT VISIBLE: units="+battleView.VisibleCount+" fallback="+battleView.FallbackCount);}
             if(combatSmokeSeen&&state.round>=2){combatSmokeDone=true;Debug.Log("UNITY MATCH COMBAT SMOKE PASS: rendered live combat and next round");}
         }
         if(smoke&&!smokeDone){

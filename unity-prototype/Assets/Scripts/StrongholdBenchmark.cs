@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Spine.Unity;
 
-[Serializable] public class BenchmarkModel { public string id, path, idle, move, attack, skill,die,deploy; public bool pma; }
+[Serializable] public class BenchmarkModel { public string id, path, idle, move, attack, skill,die,deploy,assetId;public int skillIndex; public bool pma; }
 [Serializable] public class BenchmarkModels { public BenchmarkModel[] models; }
 [Serializable] public class ReplayCount {public string kind;public int count;}
 [Serializable] public class ReplayResult {public int snapshots,units,models,failures;public ReplayCount[] events;public ReplayState[] states;public float[] positions;public int[] hp,visibleIds;}

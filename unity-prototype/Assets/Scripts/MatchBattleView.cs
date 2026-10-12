@@ -13,8 +13,10 @@ public sealed class MatchBattleView:MonoBehaviour {
     readonly Dictionary<string,Material> tileMaterials=new Dictionary<string,Material>();
     Camera camera;RenderTexture target;GameObject board;string key;float received;MatchCombat current;int fallback;string modelError;
     public int VisibleCount {get;private set;}
+    public int FallbackCount {get{return fallback;}}
     public bool HasBattle {get{return current!=null;}}
     void Awake(){
+        var full=Resources.Load<TextAsset>("match-models");if(full)foreach(var model in JsonUtility.FromJson<BenchmarkModels>(full.text).models)models[model.assetId+":"+model.skillIndex]=model;
         foreach(string prefix in new[]{"stress","replay-workload"}){
             var w=Resources.Load<TextAsset>(prefix);var m=Resources.Load<TextAsset>(prefix=="stress"?"models":"replay-models");
             if(!w||!m)continue;var data=JsonUtility.FromJson<StressWorkload>(w.text);var manifest=JsonUtility.FromJson<BenchmarkModels>(m.text);
@@ -31,7 +33,8 @@ public sealed class MatchBattleView:MonoBehaviour {
         foreach(var info in combat.infos){
             if(actors.ContainsKey(info.id)){actors[info.id].info=info;continue;}
             var actor=new Actor{info=info};
-            if(!string.IsNullOrEmpty(info.assetId)&&models.TryGetValue(info.assetId,out var model)){
+            BenchmarkModel model=null;
+            if(!string.IsNullOrEmpty(info.assetId)&&(models.TryGetValue(info.assetId+":"+Mathf.Max(1,info.skillIndex),out model)||models.TryGetValue(info.assetId+":1",out model)||models.TryGetValue(info.assetId,out model))){
                 try{
                     if(!loaded.TryGetValue(model.path,out var data)){
                         var atlasText=Resources.Load<TextAsset>(model.path+"/atlas");var skeleton=Resources.Load<TextAsset>(model.path+"/skeleton");

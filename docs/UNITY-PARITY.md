@@ -24,3 +24,9 @@ Unity `-match` / `play-unity-match.cmd` 提供中文流程测试入口：确认�
 `node tools/test-unity-preparation.mjs` 使用受控物资状态验证原版装备、指定替换旧装备的销毁、三同名晋升与奖励领取、临时区阻止准备、释放手牌位后的自动补入。不是所有界面鼠标操作或法术效果的完整覆盖。
 
 `node tools/test-unity-match-combat.mjs` 将完整对局适配器状态逐步与原 Battle.snapshot 比较，验证地图、单位元数据、事件和下一回合。`tools/measure-unity-match.ps1 -Combat` 运行原生可见单位与下一回合冒烟测试；画面仍有素材占位，不代表完整美术验证。
+
+## 素材导入
+
+`node tools/export-unity-match-models.mjs --local-only` 导出已下载的角色、敌人、召唤物素材；不带选项时尝试从现有 ECS 素材服务下载缺失文件。`--download-ids=id1,id2` 只下载指定单位，其余仅使用本地文件。生成完整 `match-models.json`，按原 assetId 和 skillIndex 匹配；骨架资源按路径缓存，避免同骨架重复解码。生成清单及美术保持 Git 忽略，缺失详细报告在 `.cache/unity-match/model-export.json`。
+
+2026-10-12 本地导入 73 个独立骨架、109 条单位/技能配置。仍有 444 条原素材索引未导入，并非全部可招募单位均完成；关卡装置如 trap_1105_accrate 尚无匹配模型，继续使用具名占位。
