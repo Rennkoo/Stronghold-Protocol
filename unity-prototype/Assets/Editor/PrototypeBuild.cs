@@ -16,7 +16,7 @@ public static class PrototypeBuild {
         }
         retainedMaterial.EnableKeyword("_STRAIGHT_ALPHA_INPUT");
         EditorUtility.SetDirty(retainedMaterial);
-        foreach(var shaderName in new[] {"Spine/Skeleton","Stronghold/Board","Stronghold/Effects"}) {
+        foreach(var shaderName in new[] {"Spine/Skeleton","Stronghold/Board","Stronghold/Effects","Unlit/Color"}) {
             var keepPath="Assets/Resources/Keep"+shaderName.Replace("/","")+".mat";
             if(!AssetDatabase.LoadAssetAtPath<Material>(keepPath))AssetDatabase.CreateAsset(new Material(Shader.Find(shaderName)),keepPath);
         }

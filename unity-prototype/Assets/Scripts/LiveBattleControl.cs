@@ -8,7 +8,7 @@ using Spine.Unity;
 
 [Serializable] public class PlayPlacement {public int id,row,col;}
 [Serializable] public class PlayCommand {public string action;public int id;public PlayPlacement[] placements;}
-[Serializable] public class PlayInfo {public int id,maxHp;public string assetId;public bool enemy;public float x,y,facing;}
+[Serializable] public class PlayInfo {public int id,maxHp;public string assetId,name;public bool enemy;public float x,y,facing;}
 [Serializable] public class PlaySkill {public int id;public bool ready;public float sp,spMax;}
 [Serializable] public class PlayResponse {public string error,message,result;public float gt;public bool finished;public int killed,total;public PlayInfo[] infos;public ReplayState[] states;public StressEvent[] events;public PlaySkill[] skills;}
 

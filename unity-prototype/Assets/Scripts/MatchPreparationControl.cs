@@ -11,7 +11,7 @@ using UnityEngine.Networking;
 [Serializable] public class MatchReward {public int tier,queued;public string source,label;public MatchPiece[] slots;}
 [Serializable] public class MatchBond {public string name;public int count,tier,layers;public bool active,off;}
 [Serializable] public class MatchShop {public int level,refreshPrice,upgradePrice;public bool frozen;public MatchPiece[] slots;public MatchReward rewardOffer;}
-[Serializable] public class MatchUi {public string phase,stageId;public int round,lp,funds,deployCount,deployCap;public bool canReady,ready,ended,paused;public MatchShop shop;public MatchPiece[] hand,temp,board;public MatchTile[] tiles;public MatchOption[] bands,cards,effects;public MatchBond[] bonds;}
+[Serializable] public class MatchUi {public string phase,stageId;public int round,lp,funds,deployCount,deployCap;public bool canReady,ready,ended,paused;public MatchShop shop;public MatchPiece[] hand,temp,board;public MatchTile[] tiles;public MatchOption[] bands,cards,effects;public MatchBond[] bonds;public MatchCombat combat;}
 [Serializable] public class MatchReply {public string error,detail;}
 [Serializable] public class MatchEnvelope {public MatchUi ui;public MatchReply reply;}
 
@@ -20,9 +20,17 @@ public sealed class MatchPreparationControl:MonoBehaviour {
     MatchUi state;bool busy;float nextPoll;int selected;string message="连接本地规则引擎…",direction="RIGHT";Font font;Vector2 scroll;
     bool smoke,smokeBought,smokeDone;
     int equipmentTarget;Vector2 prepScroll;
-    void Start(){Application.runInBackground=true;Application.targetFrameRate=60;smoke=Array.IndexOf(Environment.GetCommandLineArgs(),"-match-smoke")>=0;font=Font.CreateDynamicFontFromOSFont("Microsoft YaHei",16);StartCoroutine(Send("{\"action\":\"new\"}"));}
+    MatchBattleView battleView;
+    bool combatSmoke,combatSmokeStarted,combatSmokeSeen,combatSmokeDone;
+    void Start(){battleView=gameObject.AddComponent<MatchBattleView>();Application.runInBackground=true;Application.targetFrameRate=60;smoke=Array.IndexOf(Environment.GetCommandLineArgs(),"-match-smoke")>=0;font=Font.CreateDynamicFontFromOSFont("Microsoft YaHei",16);StartCoroutine(Send("{\"action\":\"new\"}"));}
     void Update(){
         if(busy||state==null)return;
+        combatSmoke=Array.IndexOf(Environment.GetCommandLineArgs(),"-match-combat-smoke")>=0;
+        if(combatSmoke&&!combatSmokeDone){
+            if(!combatSmokeStarted){combatSmokeStarted=true;Intent("\"t\":\"g.autoplay\",\"on\":true");return;}
+            if(state.combat!=null&&state.combat.gt>5&&battleView.VisibleCount>0&&!combatSmokeSeen){combatSmokeSeen=true;battleView.SaveCapture(System.IO.Path.Combine(Application.persistentDataPath,"match-combat.png"));Debug.Log("UNITY MATCH COMBAT VISIBLE: units="+battleView.VisibleCount);}
+            if(combatSmokeSeen&&state.round>=2){combatSmokeDone=true;Debug.Log("UNITY MATCH COMBAT SMOKE PASS: rendered live combat and next round");}
+        }
         if(smoke&&!smokeDone){
             if(state.phase=="INFO_CHECK"){Action("g.infoReady");return;}
             if(state.phase=="BAND_DRAFT"){Intent("\"t\":\"g.band\",\"bandId\":\""+state.bands[0].id+"\"");return;}
@@ -40,7 +48,7 @@ public sealed class MatchPreparationControl:MonoBehaviour {
             yield return request.SendWebRequest();
             if(request.result!=UnityWebRequest.Result.Success)message="连接失败："+request.downloadHandler.text;
             else {var response=JsonUtility.FromJson<MatchEnvelope>(request.downloadHandler.text);state=response.ui;if(json.Contains("\"intent\"")||!string.IsNullOrEmpty(response.reply.error))message=string.IsNullOrEmpty(response.reply.error)?"操作已同步":response.reply.error+" "+response.reply.detail;
-                if(selected!=0&&FindPiece(selected)==null){selected=0;equipmentTarget=0;}}
+                battleView.Apply(state.combat,state.paused);if(selected!=0&&FindPiece(selected)==null){selected=0;equipmentTarget=0;}}
         }
         busy=false;nextPoll=Time.unscaledTime+.05f;
     }
@@ -73,7 +81,8 @@ public sealed class MatchPreparationControl:MonoBehaviour {
         }else if(state.phase=="SP_DRAFT"){
             for(int i=0;i<state.cards.Length;i++)if(Button(state.cards[i].name+"  "+state.cards[i].desc))Intent("\"t\":\"g.choice\",\"idx\":"+i);
         }else if(state.phase=="PREP"){prepScroll=GUILayout.BeginScrollView(prepScroll);DrawPreparation();GUILayout.EndScrollView();}
-        else GUILayout.Label(state.ended?"本局结束，可重新开局。":"原版引擎正在推进战斗与结算；本界面尚未显示战斗模型。");
+        else if(battleView.HasBattle){var rect=GUILayoutUtility.GetRect(100,Mathf.Max(200,Screen.height-230),GUILayout.ExpandWidth(true));battleView.Draw(rect);}
+        else GUILayout.Label(state.ended?"本局结束，可重新开局。":"原版引擎正在推进回合与结算。");
         GUILayout.BeginHorizontal();
         if(Button("AI 托管"))Intent("\"t\":\"g.autoplay\",\"on\":true");
         if(Button("收回托管"))Intent("\"t\":\"g.autoplay\",\"on\":false");

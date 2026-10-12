@@ -1,4 +1,4 @@
-param([string]$Label='match-smoke')
+param([string]$Label='match-smoke',[switch]$Combat)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $folder=Join-Path $repo '.cache/unity-match-tests'
@@ -11,12 +11,16 @@ try {
     Start-Sleep -Seconds 1
     if($taskBridge.HasExited){throw 'Bridge failed to start'}
     $exe=Join-Path $repo 'unity-prototype/Builds/Windows/StrongholdBenchmark.exe'
-    $taskPlayer=Start-Process -FilePath $exe -ArgumentList @('-match','-match-smoke','-screen-width','1280','-screen-height','720','-screen-fullscreen','0','-logFile',('"'+$taskLog+'"')) -WindowStyle Hidden -PassThru
+    $taskArgs=@('-match','-match-smoke','-screen-width','1280','-screen-height','720','-screen-fullscreen','0','-logFile',('"'+$taskLog+'"'))
+    $taskPattern='UNITY MATCH SMOKE PASS'
+    if($Combat){$taskArgs[1]='-match-combat-smoke';$taskPattern='UNITY MATCH COMBAT SMOKE PASS'}
+    $taskPlayer=Start-Process -FilePath $exe -ArgumentList $taskArgs -WindowStyle Hidden -PassThru
     try {
-        $taskDeadline=(Get-Date).AddSeconds(40)
+        $taskDeadline=(Get-Date).AddSeconds(55)
         do {
             Start-Sleep -Seconds 1
-            $taskPassed=(Test-Path -LiteralPath $taskLog) -and (Select-String -LiteralPath $taskLog -Pattern 'UNITY MATCH SMOKE PASS' -Quiet)
+            $taskPassed=(Test-Path -LiteralPath $taskLog) -and (Select-String -LiteralPath $taskLog -Pattern $taskPattern -Quiet)
+            if((Test-Path -LiteralPath $taskLog) -and (Select-String -LiteralPath $taskLog -Pattern 'Serialization depth|Exception|Error:' -Quiet)){throw 'Native log contains an error'}
         }while(!$taskPassed -and (Get-Date) -lt $taskDeadline -and !$taskPlayer.HasExited)
         if(!$taskPassed){throw 'Native Match smoke failed'}
         if(Select-String -LiteralPath $taskLog -Pattern 'Serialization depth|Exception|Error:' -Quiet){throw 'Native log contains an error'}
